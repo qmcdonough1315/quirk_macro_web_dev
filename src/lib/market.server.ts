@@ -159,11 +159,14 @@ export async function fetchRentcastMarket(zip: string): Promise<RentcastMarket> 
     { headers: { "X-Api-Key": apiKey, Accept: "application/json" } },
   );
   if (!res.ok) {
-    throw new Error(
-      res.status === 404
-        ? `No market data found for ZIP ${zip}`
-        : `RentCast request failed (${res.status})`,
-    );
+    if (res.status === 404) throw new Error(`No market data found for ZIP ${zip}`);
+    if (res.status === 401 || res.status === 403) {
+      throw new Error(
+        "RentCast rejected the request — the API key needs an active subscription on app.rentcast.io.",
+      );
+    }
+    if (res.status === 429) throw new Error("RentCast rate limit reached — try again shortly.");
+    throw new Error(`RentCast request failed (${res.status})`);
   }
   return (await res.json()) as RentcastMarket;
 }
