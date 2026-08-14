@@ -8,17 +8,17 @@ import { LocalTab } from "@/components/dashboard/LocalTab";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Quirk Macro Analytics — Macro & Local Housing Dashboard" },
+      { title: "Quirk Macro — Macro & Local Housing Dashboard" },
       {
         name: "description",
         content:
           "Institutional-grade dashboard tracking mortgage rates, Treasury yields, credit conditions, and local housing market affordability.",
       },
-      { property: "og:title", content: "Quirk Macro Analytics" },
+      { property: "og:title", content: "Quirk Macro — Macro & Local Housing Dashboard" },
       {
         property: "og:description",
         content:
-          "Track mortgage rates, Treasury yields, liquidity, and local market affordability in one dashboard.",
+          "Institutional-grade dashboard tracking mortgage rates, Treasury yields, credit conditions, and local housing market affordability.",
       },
     ],
   }),

@@ -77,10 +77,16 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Quirk Macro Analytics" },
-      { name: "description", content: "Institutional macro and local housing market intelligence." },
+      { title: "Quirk Macro — Macro & Local Housing Dashboard" },
+      { name: "description", content: "Institutional-grade dashboard tracking mortgage rates, Treasury yields, credit conditions, and local housing market affordability." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
+      { property: "og:title", content: "Quirk Macro — Macro & Local Housing Dashboard" },
+      { name: "twitter:title", content: "Quirk Macro — Macro & Local Housing Dashboard" },
+      { property: "og:description", content: "Institutional-grade dashboard tracking mortgage rates, Treasury yields, credit conditions, and local housing market affordability." },
+      { name: "twitter:description", content: "Institutional-grade dashboard tracking mortgage rates, Treasury yields, credit conditions, and local housing market affordability." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/808d2cc801694b91877d8d28aed7521c/id-preview-c2f20b0d--dfb3d748-cd12-4930-a6e5-8e5857947bd7.lovable.app-1786737265465.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/808d2cc801694b91877d8d28aed7521c/id-preview-c2f20b0d--dfb3d748-cd12-4930-a6e5-8e5857947bd7.lovable.app-1786737265465.png" },
     ],
     links: [
       {
@@ -93,7 +99,6 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         rel: "stylesheet",
         href: "https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=Inter+Tight:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap",
       },
-      { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
     ],
   }),
 
