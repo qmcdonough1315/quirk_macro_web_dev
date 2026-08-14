@@ -26,7 +26,15 @@ const num = (n: number | null | undefined, digits = 1, suffix = "") =>
     ? `${n.toLocaleString("en-US", { maximumFractionDigits: digits })}${suffix}`
     : "—";
 
-function Metric({ label, value, detail }: { label: string; value: string; detail?: string }) {
+function Metric({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: string;
+  detail?: string | undefined;
+}) {
   return (
     <div className="rounded-lg border border-border/70 bg-secondary/30 p-4">
       <p className="label-caps">{label}</p>
