@@ -115,6 +115,7 @@ export function MacroTab() {
                 stroke="var(--chart-1)"
                 strokeWidth={2}
                 dot={false}
+                isAnimationActive={false}
                 activeDot={{ r: 4 }}
               />
               <Line
@@ -124,6 +125,7 @@ export function MacroTab() {
                 stroke="var(--chart-2)"
                 strokeWidth={2}
                 dot={false}
+                isAnimationActive={false}
                 activeDot={{ r: 4 }}
               />
             </LineChart>
