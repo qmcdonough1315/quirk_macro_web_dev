@@ -64,6 +64,10 @@ export async function fetchFredSeries(seriesId: string): Promise<SeriesSummary> 
 export interface MacroSnapshot {
   mortgage: SeriesSummary;
   treasury: SeriesSummary;
+  /** Real GDP growth, QoQ annualized (FRED A191RO1Q156NBEA) */
+  gdp: { latest: number; latestDate: string; changePp: number };
+  /** Core PCE price index, YoY % (FRED PCEPILFE) */
+  corePce: { latest: number; latestDate: string; changePp: number };
   spreadBps: number;
   spreadChangeBps: number;
   series: { month: string; treasury: number; mortgage: number }[];
@@ -71,9 +75,11 @@ export interface MacroSnapshot {
 }
 
 export async function fetchMacroSnapshot(): Promise<MacroSnapshot> {
-  const [mortgage, treasury] = await Promise.all([
+  const [mortgage, treasury, gdpRaw, corePce] = await Promise.all([
     fetchFredSeries("MORTGAGE30US"),
     fetchFredSeries("DGS10"),
+    fetchFredSeries("A191RO1Q156NBEA"),
+    fetchInflationYoY("PCEPILFE"),
   ]);
 
   const months = new Map<string, { month: string; treasury: number; mortgage: number }>();
@@ -94,6 +100,12 @@ export async function fetchMacroSnapshot(): Promise<MacroSnapshot> {
   return {
     mortgage,
     treasury,
+    gdp: {
+      latest: gdpRaw.latest,
+      latestDate: gdpRaw.latestDate,
+      changePp: Math.round(gdpRaw.changeBps) / 100,
+    },
+    corePce,
     spreadBps: Math.round((mortgage.latest - treasury.latest) * 100),
     spreadChangeBps: mortgage.changeBps - treasury.changeBps,
     series,

@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import {
@@ -5,8 +6,10 @@ import {
   ArrowDownRight,
   ArrowUpRight,
   Banknote,
+  CalendarDays,
   Droplets,
   Gauge as GaugeIcon,
+  Sparkles,
 } from "lucide-react";
 import {
   CartesianGrid,
@@ -21,7 +24,7 @@ import {
 
 import { Gauge } from "./Gauge";
 import { IndicatorList } from "./IndicatorList";
-import { getMacroSnapshot } from "@/lib/market.functions";
+import { getEconCalendar, getMacroRecap, getMacroSnapshot } from "@/lib/market.functions";
 import {
   lendingConditions,
   liquidityIndicators,
@@ -46,6 +49,17 @@ function ChartTooltip({ active, payload, label }: any) {
 }
 
 const bps = (n: number) => `${n > 0 ? "+" : ""}${n} bps`;
+const pp = (n: number) => `${n > 0 ? "+" : ""}${n.toFixed(2)} pp`;
+
+const IMPACT_BADGE: Record<string, string> = { high: "🔴", medium: "🟡", low: "🔵" };
+
+const fmtDay = (iso: string) =>
+  new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
 
 export function MacroTab() {
   const fetchMacro = useServerFn(getMacroSnapshot);
@@ -55,6 +69,75 @@ export function MacroTab() {
     staleTime: 5 * 60_000,
     retry: 1,
   });
+
+  const fetchRecap = useServerFn(getMacroRecap);
+  const recap = useQuery({
+    queryKey: ["macro-recap", data?.updated],
+    queryFn: () =>
+      fetchRecap({
+        data: {
+          mortgageRate: data!.mortgage.latest,
+          treasuryYield: data!.treasury.latest,
+          gdpGrowth: data!.gdp.latest,
+          corePceYoY: data!.corePce.latest,
+          asOf: data!.updated,
+        },
+      }),
+    enabled: !!data,
+    staleTime: 6 * 60 * 60_000,
+    retry: 1,
+  });
+
+  const fetchCalendar = useServerFn(getEconCalendar);
+  const calendar = useQuery({
+    queryKey: ["econ-calendar"],
+    queryFn: () => fetchCalendar(),
+    staleTime: 6 * 60 * 60_000,
+    retry: 1,
+  });
+
+  const calendarGroups = useMemo(() => {
+    const map = new Map<string, NonNullable<typeof calendar.data>>();
+    for (const e of calendar.data ?? []) {
+      const arr = map.get(e.date) ?? [];
+      arr.push(e);
+      map.set(e.date, arr);
+    }
+    return Array.from(map.entries());
+  }, [calendar.data]);
+
+  const ticker = data
+    ? [
+        {
+          label: "30Y Fixed Mortgage",
+          value: `${data.mortgage.latest.toFixed(2)}%`,
+          change: bps(data.mortgage.changeBps),
+          up: data.mortgage.changeBps >= 0,
+          upIsGood: false,
+        },
+        {
+          label: "10Y Treasury Yield",
+          value: `${data.treasury.latest.toFixed(2)}%`,
+          change: bps(data.treasury.changeBps),
+          up: data.treasury.changeBps >= 0,
+          upIsGood: false,
+        },
+        {
+          label: "GDP Growth · QoQ ann.",
+          value: `${data.gdp.latest.toFixed(1)}%`,
+          change: pp(data.gdp.changePp),
+          up: data.gdp.changePp >= 0,
+          upIsGood: true,
+        },
+        {
+          label: "Core PCE · YoY",
+          value: `${data.corePce.latest.toFixed(2)}%`,
+          change: pp(data.corePce.changePp),
+          up: data.corePce.changePp >= 0,
+          upIsGood: false,
+        },
+      ]
+    : [];
 
   const metrics: KeyMetric[] = data
     ? [
@@ -103,6 +186,39 @@ export function MacroTab() {
           </p>
         </div>
       ) : null}
+
+      {/* Top ticker */}
+      <section className="panel flex flex-wrap divide-x divide-border/70">
+        {isPending
+          ? Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="min-w-[170px] flex-1 px-5 py-4">
+                <div className="h-3 w-20 animate-pulse rounded bg-secondary" />
+                <div className="mt-2.5 h-5 w-16 animate-pulse rounded bg-secondary" />
+              </div>
+            ))
+          : ticker.map((t) => {
+              const good = t.up === t.upIsGood;
+              const Icon = t.up ? ArrowUpRight : ArrowDownRight;
+              return (
+                <div key={t.label} className="min-w-[170px] flex-1 px-5 py-4">
+                  <p className="label-caps">{t.label}</p>
+                  <div className="mt-1.5 flex items-baseline gap-2">
+                    <span className="font-display text-lg font-semibold tabular-nums tracking-tight">
+                      {t.value}
+                    </span>
+                    <span
+                      className={`flex items-center gap-0.5 font-mono text-[11px] tabular-nums ${
+                        good ? "text-positive" : "text-negative"
+                      }`}
+                    >
+                      <Icon className="size-3" />
+                      {t.change}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+      </section>
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {isPending
@@ -201,6 +317,110 @@ export function MacroTab() {
                 />
               </LineChart>
             </ResponsiveContainer>
+          )}
+        </div>
+      </section>
+
+      <section className="grid gap-4 lg:grid-cols-2">
+        {/* Past Week Recap */}
+        <div className="panel p-6">
+          <div className="mb-4 flex items-center gap-2.5">
+            <Sparkles className="size-4 text-accent" />
+            <h3 className="font-display text-base font-semibold tracking-tight">
+              Past Week Recap
+            </h3>
+            <span className="ml-auto rounded-md bg-accent/10 px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-accent">
+              AI summary
+            </span>
+          </div>
+          {recap.isPending ? (
+            <div className="space-y-2.5">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="h-4 animate-pulse rounded bg-secondary"
+                  style={{ width: `${92 - i * 7}%` }}
+                />
+              ))}
+            </div>
+          ) : recap.error ? (
+            <p className="text-sm text-muted-foreground">
+              Recap unavailable: {(recap.error as Error).message}
+            </p>
+          ) : recap.data ? (
+            <>
+              <p className="font-display text-lg font-semibold leading-snug tracking-tight">
+                {recap.data.headline}
+              </p>
+              <ul className="mt-4 space-y-3">
+                {recap.data.bullets.map((b, i) => (
+                  <li key={i} className="flex gap-3 text-sm text-muted-foreground">
+                    <span className="mt-[7px] size-1.5 shrink-0 rounded-full bg-accent" />
+                    <span className="leading-relaxed">{b}</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+        </div>
+
+        {/* Upcoming 7-day calendar */}
+        <div className="panel p-6">
+          <div className="mb-4 flex items-center gap-2.5">
+            <CalendarDays className="size-4 text-accent" />
+            <h3 className="font-display text-base font-semibold tracking-tight">
+              Upcoming 7-Day Calendar
+            </h3>
+            <span className="ml-auto rounded-md bg-secondary px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+              Consensus vs. prior
+            </span>
+          </div>
+          {calendar.isPending ? (
+            <div className="space-y-2.5">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="h-12 animate-pulse rounded-lg bg-secondary/40" />
+              ))}
+            </div>
+          ) : calendar.error ? (
+            <p className="text-sm text-muted-foreground">
+              Calendar unavailable: {(calendar.error as Error).message}
+            </p>
+          ) : calendarGroups.length ? (
+            <div className="space-y-4">
+              {calendarGroups.map(([date, events]) => (
+                <div key={date}>
+                  <p className="label-caps mb-2">{fmtDay(date)}</p>
+                  <div className="space-y-2">
+                    {events.map((e, i) => (
+                      <div
+                        key={`${e.title}-${i}`}
+                        className="flex items-center gap-3 rounded-lg border border-border/70 bg-secondary/30 px-3.5 py-2.5"
+                      >
+                        <span className="text-sm leading-none" title={`${e.impact} impact`}>
+                          {IMPACT_BADGE[e.impact] ?? "⚪"}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-foreground">{e.title}</p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            {e.time} · {e.category}
+                          </p>
+                        </div>
+                        <div className="shrink-0 text-right font-mono text-[11px] tabular-nums text-muted-foreground">
+                          <p>
+                            <span className="text-foreground">{e.consensus}</span> cons
+                          </p>
+                          <p>{e.prior} prior</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              No major releases scheduled over the next 7 days.
+            </p>
           )}
         </div>
       </section>
