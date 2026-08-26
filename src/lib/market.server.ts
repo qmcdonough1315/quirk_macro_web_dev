@@ -100,6 +100,12 @@ export async function fetchMacroSnapshot(): Promise<MacroSnapshot> {
   return {
     mortgage,
     treasury,
+    gdp: {
+      latest: gdpRaw.latest,
+      latestDate: gdpRaw.latestDate,
+      changePp: Math.round(gdpRaw.changeBps) / 100,
+    },
+    corePce,
     spreadBps: Math.round((mortgage.latest - treasury.latest) * 100),
     spreadChangeBps: mortgage.changeBps - treasury.changeBps,
     series,

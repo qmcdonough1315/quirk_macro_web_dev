@@ -20,6 +20,8 @@ export const Route = createFileRoute("/")({
         content:
           "Institutional-grade dashboard tracking mortgage rates, Treasury yields, credit conditions, and local housing market affordability.",
       },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: Dashboard,
