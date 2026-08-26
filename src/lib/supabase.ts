@@ -58,7 +58,9 @@ export async function searchLocations(term: string): Promise<LocationSuggestion[
     }));
   }
 
-  let rows: { zip_code: string; city: string | null; state: string | null }[] | null = null;
+  type CityHit = { zip_code: string; city: string | null; state: string | null };
+
+  let rows: CityHit[];
   const primary = await supabase
     .from("zip_data")
     .select("zip_code, city, state")
@@ -74,13 +76,13 @@ export async function searchLocations(term: string): Promise<LocationSuggestion[
       .order("city")
       .limit(80);
     if (retry.error) throw new Error(retry.error.message);
-    rows = retry.data as typeof rows;
+    rows = (retry.data ?? []) as unknown as CityHit[];
   } else {
-    rows = primary.data as typeof rows;
+    rows = (primary.data ?? []) as unknown as CityHit[];
   }
 
   const groups = new Map<string, LocationSuggestion & { kind: "city" }>();
-  for (const r of rows ?? []) {
+  for (const r of rows) {
     if (!r.city) continue;
     const key = `${r.city}|${r.state ?? ""}`;
     const existing = groups.get(key);
