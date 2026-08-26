@@ -306,3 +306,217 @@ export async function buildLocalMarket(zipInput: string): Promise<LocalMarketLiv
     tags: profile.tags,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Inflation (YoY), macro recap, and economic calendar
+// ---------------------------------------------------------------------------
+
+async function fetchFredObservations(seriesId: string, startIso: string): Promise<SeriesPoint[]> {
+  const apiKey = process.env["FRED_API_KEY"];
+  if (!apiKey) throw new Error("FRED_API_KEY is not configured");
+  const url = `${FRED_BASE}?series_id=${seriesId}&api_key=${apiKey}&file_type=json&observation_start=${startIso}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`FRED request failed for ${seriesId} (${res.status})`);
+  const json = (await res.json()) as { observations?: { date: string; value: string }[] };
+  return (json.observations ?? [])
+    .filter((o) => o.value !== "." && !Number.isNaN(Number(o.value)))
+    .map((o) => ({ date: o.date, value: Number(o.value) }));
+}
+
+/** YoY % change for a monthly index series (e.g. PCEPILFE core PCE). */
+export async function fetchInflationYoY(
+  seriesId: string,
+): Promise<{ latest: number; latestDate: string; changePp: number }> {
+  const start = new Date();
+  start.setUTCFullYear(start.getUTCFullYear() - 3);
+  const obs = await fetchFredObservations(seriesId, start.toISOString().slice(0, 10));
+  if (obs.length < 13) throw new Error(`Not enough observations for ${seriesId}`);
+
+  const yoyAt = (i: number): number | undefined => {
+    const prior = obs[i - 12];
+    const cur = obs[i];
+    if (!prior || !cur || prior.value === 0) return undefined;
+    return ((cur.value - prior.value) / prior.value) * 100;
+  };
+
+  const latest = yoyAt(obs.length - 1);
+  const prev = yoyAt(obs.length - 2);
+  if (typeof latest !== "number") throw new Error(`Could not compute YoY for ${seriesId}`);
+
+  return {
+    latest: Math.round(latest * 100) / 100,
+    latestDate: obs[obs.length - 1]!.date,
+    changePp: typeof prev === "number" ? Math.round((latest - prev) * 100) / 100 : 0,
+  };
+}
+
+export interface MacroContextInput {
+  mortgageRate?: number;
+  treasuryYield?: number;
+  gdpGrowth?: number;
+  corePceYoY?: number;
+  asOf?: string;
+}
+
+export interface RecapResult {
+  headline: string;
+  bullets: string[];
+}
+
+export async function generateMacroRecap(ctx: MacroContextInput): Promise<RecapResult> {
+  const apiKey = process.env["LOVABLE_API_KEY"];
+  if (!apiKey) throw new Error("AI key is not configured");
+
+  const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "openai/gpt-5-mini",
+      messages: [
+        {
+          role: "system",
+          content: [
+            'You are a macro strategist writing the "Past Week Recap" for an institutional housing & rates dashboard. Respond ONLY with strict JSON:',
+            '{"headline":string,"bullets":[string]}',
+            '- "headline": ONE sharp sentence (max 18 words) capturing the week for rates and housing.',
+            '- "bullets": EXACTLY 6 items, each 1-2 sentences, covering in order: (1) GDP growth, (2) employment data (BLS payrolls / ADP), (3) CPI & Core PCE inflation, (4) Federal Reserve policy news, (5) Housing Starts & homebuilder activity, (6) Case-Shiller / home price trends.',
+            "Use the provided reference levels where given. For reports without a provided level, characterize direction only (\"held steady\", \"ticked higher\") — never invent precise figures.",
+          ].join("\n"),
+        },
+        {
+          role: "user",
+          content: `Reference levels — 30Y mortgage ${ctx.mortgageRate ?? "—"}%, 10Y Treasury ${
+            ctx.treasuryYield ?? "—"
+          }%, real GDP growth ${ctx.gdpGrowth ?? "—"}% (QoQ annualized), Core PCE ${
+            ctx.corePceYoY ?? "—"
+          }% YoY. Data as of ${ctx.asOf ?? "latest"}.`,
+        },
+      ],
+    }),
+  });
+
+  if (!res.ok) throw new Error(`AI recap failed (${res.status})`);
+  const json = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+  const raw = json.choices?.[0]?.message?.content ?? "";
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) throw new Error("AI recap returned an unexpected response");
+  const parsed = JSON.parse(match[0]) as { headline?: string; bullets?: string[] };
+  return {
+    headline: parsed.headline ?? "Rates held their range while housing data stayed mixed.",
+    bullets: (parsed.bullets ?? []).slice(0, 6),
+  };
+}
+
+export interface CalendarEvent {
+  date: string; // YYYY-MM-DD
+  time: string; // e.g. "8:30 AM ET"
+  title: string;
+  category: string;
+  impact: "high" | "medium" | "low";
+  consensus: string;
+  prior: string;
+}
+
+function next7Days(): { date: string; weekday: string }[] {
+  const now = new Date();
+  const days: { date: string; weekday: string }[] = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + i));
+    days.push({
+      date: d.toISOString().slice(0, 10),
+      weekday: d.toLocaleString("en-US", { weekday: "long", timeZone: "UTC" }),
+    });
+  }
+  return days;
+}
+
+/** Rule-based recurring release schedule, used when the AI calendar is unavailable. */
+function fallbackCalendar(days: { date: string; weekday: string }[]): CalendarEvent[] {
+  const byWeekday: Record<string, Omit<CalendarEvent, "date">[]> = {
+    Monday: [
+      { time: "11:00 AM ET", title: "NY Fed 1-Yr Inflation Expectations", category: "Inflation", impact: "low", consensus: "—", prior: "3.0%" },
+    ],
+    Tuesday: [
+      { time: "6:00 AM ET", title: "NFIB Small Business Optimism", category: "Growth", impact: "medium", consensus: "—", prior: "100.8" },
+    ],
+    Wednesday: [
+      { time: "7:00 AM ET", title: "MBA Weekly Mortgage Applications", category: "Housing", impact: "medium", consensus: "—", prior: "+1.1%" },
+      { time: "1:00 PM ET", title: "10-Year Treasury Note Auction", category: "Rates", impact: "medium", consensus: "—", prior: "—" },
+    ],
+    Thursday: [
+      { time: "8:30 AM ET", title: "Initial Jobless Claims", category: "Employment", impact: "high", consensus: "225K", prior: "218K" },
+      { time: "10:00 AM ET", title: "Existing Home Sales", category: "Housing", impact: "medium", consensus: "4.10M", prior: "4.06M" },
+    ],
+    Friday: [
+      { time: "10:00 AM ET", title: "U. Michigan Consumer Sentiment", category: "Consumer", impact: "medium", consensus: "61.5", prior: "61.7" },
+    ],
+  };
+  return days.flatMap((d) =>
+    (byWeekday[d.weekday] ?? []).map((e) => ({ ...e, date: d.date })),
+  );
+}
+
+export async function generateEconCalendar(): Promise<CalendarEvent[]> {
+  const days = next7Days();
+  const validDates = new Set(days.map((d) => d.date));
+
+  try {
+    const apiKey = process.env["LOVABLE_API_KEY"];
+    if (!apiKey) throw new Error("AI key is not configured");
+
+    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "openai/gpt-5-mini",
+        messages: [
+          {
+            role: "system",
+            content: [
+              "You maintain the U.S. economic release calendar. Respond ONLY with strict JSON: an array of events:",
+              '[{"date":"YYYY-MM-DD","time":"8:30 AM ET","title":string,"category":string,"impact":"high"|"medium"|"low","consensus":string,"prior":string}]',
+              "Include only well-known scheduled U.S. macro releases for the requested dates (CPI, PPI, Core PCE, Nonfarm Payrolls, ADP, Jobless Claims, FOMC minutes/decisions, Housing Starts, Building Permits, Existing/New Home Sales, Case-Shiller HPI, GDP, Retail Sales, Consumer Sentiment, MBA Mortgage Applications).",
+              'Impact: "high" for CPI / Core PCE / payrolls / FOMC / GDP, "medium" for housing / claims / retail, "low" otherwise.',
+              'consensus / prior are short strings ("3.1%", "+175K", "4.09M"); use "—" when not applicable.',
+              "Accuracy over quantity — it is fine to return few events. Skip dates with no notable releases.",
+            ].join("\n"),
+          },
+          {
+            role: "user",
+            content: `List the scheduled U.S. economic releases for these dates: ${days
+              .map((d) => `${d.date} (${d.weekday})`)
+              .join(", ")}.`,
+          },
+        ],
+      }),
+    });
+
+    if (!res.ok) throw new Error(`AI calendar failed (${res.status})`);
+    const json = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+    const raw = json.choices?.[0]?.message?.content ?? "";
+    const match = raw.match(/\[[\s\S]*\]/);
+    if (!match) throw new Error("AI calendar returned an unexpected response");
+    const parsed = JSON.parse(match[0]) as Partial<CalendarEvent>[];
+
+    const events: CalendarEvent[] = parsed
+      .filter(
+        (e): e is CalendarEvent & { date: string } =>
+          typeof e?.date === "string" && validDates.has(e.date) && typeof e?.title === "string",
+      )
+      .map((e) => ({
+        date: e.date,
+        time: typeof e.time === "string" ? e.time : "—",
+        title: e.title,
+        category: typeof e.category === "string" ? e.category : "Macro",
+        impact: e.impact === "high" || e.impact === "medium" || e.impact === "low" ? e.impact : "low",
+        consensus: typeof e.consensus === "string" ? e.consensus : "—",
+        prior: typeof e.prior === "string" ? e.prior : "—",
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    if (!events.length) throw new Error("AI calendar returned no usable events");
+    return events;
+  } catch {
+    return fallbackCalendar(days);
+  }
+}
