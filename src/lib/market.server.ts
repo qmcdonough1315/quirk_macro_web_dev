@@ -476,3 +476,122 @@ export async function generateEconCalendar(): Promise<CalendarEvent[]> {
     return fallbackCalendar(days);
   }
 }
+
+/* ── Treasury yield curve + Fed funds probability ─────────────────────────── */
+
+export interface CurvePoint {
+  tenor: string;
+  months: number;
+  current: number;
+  yearAgo: number | null;
+}
+
+export interface RateProbability {
+  label: string;
+  probability: number;
+}
+
+export interface RatesOutlook {
+  curve: CurvePoint[];
+  curveDate: string;
+  fedFunds: number;
+  /** implied policy rate ~12 months out, from the 1Y Treasury */
+  impliedRate: number;
+  probabilities: RateProbability[];
+  nextMeeting: string;
+  updated: string;
+}
+
+const CURVE_SERIES: { id: string; tenor: string; months: number }[] = [
+  { id: "DGS1MO", tenor: "1M", months: 1 },
+  { id: "DGS3MO", tenor: "3M", months: 3 },
+  { id: "DGS6MO", tenor: "6M", months: 6 },
+  { id: "DGS1", tenor: "1Y", months: 12 },
+  { id: "DGS2", tenor: "2Y", months: 24 },
+  { id: "DGS3", tenor: "3Y", months: 36 },
+  { id: "DGS5", tenor: "5Y", months: 60 },
+  { id: "DGS7", tenor: "7Y", months: 84 },
+  { id: "DGS10", tenor: "10Y", months: 120 },
+  { id: "DGS20", tenor: "20Y", months: 240 },
+  { id: "DGS30", tenor: "30Y", months: 360 },
+];
+
+/**
+ * Market-implied Fed funds path. Uses the Atlanta Fed Market Probability
+ * Tracker approach in simplified form: the gap between the current effective
+ * fed funds rate and the near-dated Treasury bill/note curve implies how much
+ * easing or tightening is priced for the next policy meeting.
+ */
+function impliedProbabilities(fedFunds: number, threeMonth: number): RateProbability[] {
+  const gapBps = (threeMonth - fedFunds) * 100;
+  // 25 bps move fully priced when the 3M bill sits a full quarter-point away.
+  const cut = Math.max(0, Math.min(1, -gapBps / 25));
+  const hike = Math.max(0, Math.min(1, gapBps / 25));
+  const cut50 = Math.max(0, Math.min(1, (-gapBps - 25) / 25)) * cut;
+  const cut25 = Math.max(0, cut - cut50);
+  const hike25 = Math.max(0, hike);
+  const hold = Math.max(0, 1 - cut25 - cut50 - hike25);
+  const round = (n: number) => Math.round(n * 1000) / 10;
+  return [
+    { label: "Cut 50+ bps", probability: round(cut50) },
+    { label: "Cut 25 bps", probability: round(cut25) },
+    { label: "Hold", probability: round(hold) },
+    { label: "Hike 25 bps", probability: round(hike25) },
+  ];
+}
+
+async function latestAndYearAgo(seriesId: string) {
+  const start = new Date();
+  start.setUTCFullYear(start.getUTCFullYear() - 1);
+  start.setUTCDate(start.getUTCDate() - 20);
+  const obs = await fetchFredObservations(seriesId, start.toISOString().slice(0, 10));
+  if (!obs.length) return null;
+  const last = obs[obs.length - 1]!;
+  const first = obs[0]!;
+  return { current: last.value, currentDate: last.date, yearAgo: first.value };
+}
+
+export async function fetchRatesOutlook(): Promise<RatesOutlook> {
+  const results = await Promise.all(
+    CURVE_SERIES.map(async (s) => ({ meta: s, data: await latestAndYearAgo(s.id).catch(() => null) })),
+  );
+
+  const curve: CurvePoint[] = [];
+  let curveDate = "";
+  for (const r of results) {
+    if (!r.data) continue;
+    curveDate = r.data.currentDate > curveDate ? r.data.currentDate : curveDate;
+    curve.push({
+      tenor: r.meta.tenor,
+      months: r.meta.months,
+      current: r.data.current,
+      yearAgo: r.data.yearAgo,
+    });
+  }
+  if (!curve.length) throw new Error("Treasury curve data unavailable");
+
+  const ff = await latestAndYearAgo("DFF").catch(() => null);
+  const fedFunds = ff?.current ?? curve[0]!.current;
+  const threeMonth = curve.find((c) => c.tenor === "3M")?.current ?? fedFunds;
+  const oneYear = curve.find((c) => c.tenor === "1Y")?.current ?? fedFunds;
+
+  return {
+    curve: curve.sort((a, b) => a.months - b.months),
+    curveDate,
+    fedFunds,
+    impliedRate: oneYear,
+    probabilities: impliedProbabilities(fedFunds, threeMonth),
+    nextMeeting: nextFomcMeeting(),
+    updated: new Date().toISOString(),
+  };
+}
+
+/** Approximate next FOMC decision date (8 meetings/yr, ~6-week cadence). */
+function nextFomcMeeting(): string {
+  const dates2026 = [
+    "2026-01-28", "2026-03-18", "2026-04-29", "2026-06-17",
+    "2026-07-29", "2026-09-16", "2026-11-04", "2026-12-16",
+  ];
+  const today = new Date().toISOString().slice(0, 10);
+  return dates2026.find((d) => d >= today) ?? "2027-01-27";
+}
