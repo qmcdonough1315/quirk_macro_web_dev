@@ -172,15 +172,13 @@ export async function buildLocalMarket(zipInput: string): Promise<LocalMarketLiv
   const zip = zipInput.trim();
   if (!/^\d{5}$/.test(zip)) throw new Error("Enter a valid 5-digit ZIP code");
 
-  const market = await fetchRentcastMarket(zip);
-  const sale = market.saleData ?? {};
-  const rent = market.rentalData ?? {};
+  const market = await fetchRealtyMarket(zip);
 
-  const medianPrice = sale.medianPrice ?? sale.averagePrice;
-  const medianRent = rent.medianRent ?? rent.averageRent;
-  const ppsf = sale.medianPricePerSquareFoot ?? sale.averagePricePerSquareFoot;
-  const priceYoY = yoy(sale.history, "medianPrice", medianPrice);
-  const rentYoY = yoy(rent.history, "medianRent", medianRent);
+  const medianPrice = market.medianPrice;
+  const medianRent = market.medianRent;
+  const ppsf = market.pricePerSqFt;
+  const priceYoY = market.priceYoYPct;
+  const rentYoY = undefined as number | undefined;
 
   const priceToRent =
     medianPrice && medianRent ? medianPrice / (medianRent * 12) : undefined;
@@ -192,7 +190,7 @@ export async function buildLocalMarket(zipInput: string): Promise<LocalMarketLiv
   const principal = (medianPrice ?? 0) * 0.8;
   const payment = r > 0 ? (principal * r) / (1 - Math.pow(1 + r, -360)) : 0;
 
-  const dom = sale.medianDaysOnMarket ?? sale.averageDaysOnMarket;
+  const dom = market.medianDom;
   // 0 = buyer market, 100 = seller market
   const domScore = typeof dom === "number" ? Math.max(0, Math.min(100, 100 - (dom - 10) * 1.4)) : 50;
   const momentum = typeof priceYoY === "number" ? Math.max(0, Math.min(100, 50 + priceYoY * 4)) : 50;
@@ -205,9 +203,11 @@ export async function buildLocalMarket(zipInput: string): Promise<LocalMarketLiv
       pricePerSqFt: ppsf,
       medianRent,
       priceYoYPercent: priceYoY,
-      rentYoYPercent: rentYoY,
       medianDaysOnMarket: dom,
-      activeListings: sale.totalListings,
+      homesSoldLastMonth: market.homesSold,
+      saleToListPercent: market.saleToListPct,
+      homesWithPriceDropsPercent: market.priceDropSharePct,
+      activeListings: market.totalListings,
       mortgageRate: mortgage.latest,
     }),
   );
@@ -216,17 +216,17 @@ export async function buildLocalMarket(zipInput: string): Promise<LocalMarketLiv
     zip,
     name: profile.name,
     stats: [
-      { label: "Median House Price", value: usd(medianPrice), detail: `${pct(priceYoY)} YoY` },
-      { label: "Price per Sq Ft", value: usd(ppsf), detail: "RentCast listings" },
+      { label: "Median Sale Price", value: usd(medianPrice), detail: `${pct(priceYoY)} YoY` },
+      { label: "Price per Sq Ft", value: usd(ppsf), detail: "active Redfin listings" },
       {
         label: "Active Listings",
-        value: sale.totalListings?.toLocaleString("en-US") ?? "—",
-        detail: `${sale.newListings ?? "—"} new this month`,
+        value: market.totalListings?.toLocaleString("en-US") ?? "—",
+        detail: `${market.newListings ?? "—"} new this week`,
       },
       {
         label: "Median Days on Market",
         value: typeof dom === "number" ? `${Math.round(dom)} days` : "—",
-        detail: "for-sale inventory",
+        detail: `${market.homesSold ?? "—"} homes sold`,
       },
       {
         label: "Est. Monthly Payment",
@@ -235,7 +235,7 @@ export async function buildLocalMarket(zipInput: string): Promise<LocalMarketLiv
       },
     ],
     rental: [
-      { label: "Median Rent", value: usd(medianRent), detail: `${pct(rentYoY)} YoY` },
+      { label: "Median Rent", value: usd(medianRent), detail: "apartments.com listings" },
       {
         label: "Estimated Cap Rate",
         value: typeof capRate === "number" ? `${capRate.toFixed(1)}%` : "—",
@@ -251,9 +251,10 @@ export async function buildLocalMarket(zipInput: string): Promise<LocalMarketLiv
     affordabilityNotes: [
       { label: "Median mortgage payment", value: payment ? `${usd(payment)} / mo` : "—" },
       { label: "Est. down payment (20%)", value: usd((medianPrice ?? 0) * 0.2) },
-      { label: "Rental listings tracked", value: rent.totalListings?.toLocaleString("en-US") ?? "—" },
+      { label: "Sale-to-list price", value: typeof market.saleToListPct === "number" ? `${market.saleToListPct.toFixed(1)}%` : "—" },
       { label: "Median days on market", value: typeof dom === "number" ? `${Math.round(dom)} days` : "—" },
     ],
+
     bullets: profile.bullets,
     tags: profile.tags,
   };
