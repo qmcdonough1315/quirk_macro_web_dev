@@ -6,6 +6,7 @@ import { MacroTab } from "@/components/dashboard/MacroTab";
 import { HousingTab } from "@/components/dashboard/HousingTab";
 import { LocalTab } from "@/components/dashboard/LocalTab";
 import { FactorBetaTab } from "@/components/dashboard/FactorBetaTab";
+import { CashManagerTab } from "@/components/dashboard/CashManagerTab";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -34,6 +35,7 @@ const tabs = [
   { id: "macros", label: "Get Your Macros" },
   { id: "local", label: "Local Market Explorer" },
   { id: "factors", label: "Factor Beta Predictions" },
+  { id: "cash", label: "Cash Manager Engine" },
 ] as const;
 
 function Dashboard() {
@@ -86,8 +88,10 @@ function Dashboard() {
           <MacroTab />
         ) : tab === "local" ? (
           <LocalTab />
-        ) : (
+        ) : tab === "factors" ? (
           <FactorBetaTab />
+        ) : (
+          <CashManagerTab />
         )}
       </main>
 
