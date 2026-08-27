@@ -497,9 +497,12 @@ export function LocalTab() {
               <>
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {hot.data.properties.map((p) => (
-                    <div
+                    <a
                       key={p.id}
-                      className="rounded-lg border border-border/70 bg-secondary/30 p-4 transition-colors hover:border-accent/40"
+                      href={p.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block rounded-lg border border-border/70 bg-secondary/30 p-4 transition-colors hover:border-accent/40 hover:bg-secondary/50"
                     >
                       <div className="flex items-start justify-between gap-2">
                         <p className="font-display text-lg font-semibold tabular-nums tracking-tight">
@@ -528,7 +531,8 @@ export function LocalTab() {
                             ? `Listed ${p.daysOnMarket}d ago`
                             : "Active listing"}
                       </p>
-                    </div>
+                      <p className="mt-2 text-[11px] text-accent">View listing ↗</p>
+                    </a>
                   ))}
                 </div>
                 {hot.data.source === "sample" ? (
