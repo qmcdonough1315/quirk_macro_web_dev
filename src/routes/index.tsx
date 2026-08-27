@@ -5,6 +5,7 @@ import { Activity } from "lucide-react";
 import { MacroTab } from "@/components/dashboard/MacroTab";
 import { HousingTab } from "@/components/dashboard/HousingTab";
 import { LocalTab } from "@/components/dashboard/LocalTab";
+import { FactorBetaTab } from "@/components/dashboard/FactorBetaTab";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -58,7 +59,7 @@ function Dashboard() {
         </div>
 
         <div className="mx-auto max-w-7xl px-6">
-          <nav className="flex gap-1" role="tablist" aria-label="Dashboard sections">
+          <nav className="flex flex-wrap gap-1" role="tablist" aria-label="Dashboard sections">
             {tabs.map((t) => (
               <button
                 key={t.id}
@@ -79,7 +80,15 @@ function Dashboard() {
       </header>
 
       <main className="mx-auto max-w-7xl px-6 py-8">
-        {tab === "housing" ? <HousingTab /> : tab === "macros" ? <MacroTab /> : <LocalTab />}
+        {tab === "housing" ? (
+          <HousingTab />
+        ) : tab === "macros" ? (
+          <MacroTab />
+        ) : tab === "local" ? (
+          <LocalTab />
+        ) : (
+          <FactorBetaTab />
+        )}
       </main>
 
       <footer className="border-t border-border/70">
