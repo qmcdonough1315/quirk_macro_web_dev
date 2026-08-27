@@ -132,56 +132,8 @@ const usd = (n: number | undefined | null, digits = 0) =>
 const pct = (n: number | undefined | null) =>
   typeof n === "number" && Number.isFinite(n) ? `${n > 0 ? "+" : ""}${n.toFixed(1)}%` : "—";
 
-interface RentcastMarket {
-  zipCode?: string;
-  saleData?: {
-    averagePrice?: number;
-    medianPrice?: number;
-    averagePricePerSquareFoot?: number;
-    medianPricePerSquareFoot?: number;
-    averageDaysOnMarket?: number;
-    medianDaysOnMarket?: number;
-    totalListings?: number;
-    newListings?: number;
-    history?: Record<string, { medianPrice?: number }>;
-  };
-  rentalData?: {
-    averageRent?: number;
-    medianRent?: number;
-    averageDaysOnMarket?: number;
-    totalListings?: number;
-    history?: Record<string, { medianRent?: number }>;
-  };
-}
+// RentCast has been replaced by RealtyAPI (Redfin + Apartments.com) — see realty.server.ts.
 
-function yoy(history: Record<string, { medianPrice?: number; medianRent?: number }> | undefined, key: "medianPrice" | "medianRent", current?: number) {
-  if (!history || typeof current !== "number") return undefined;
-  const keys = Object.keys(history).sort();
-  const target = keys[Math.max(0, keys.length - 13)];
-  const prior = target ? history[target]?.[key] : undefined;
-  if (typeof prior !== "number" || prior === 0) return undefined;
-  return ((current - prior) / prior) * 100;
-}
-
-export async function fetchRentcastMarket(zip: string): Promise<RentcastMarket> {
-  const apiKey = process.env["RENTCAST_API_KEY"];
-  if (!apiKey) throw new Error("RENTCAST_API_KEY is not configured");
-  const res = await fetch(
-    `https://api.rentcast.io/v1/markets?zipCode=${encodeURIComponent(zip)}&dataType=All&historyRange=13`,
-    { headers: { "X-Api-Key": apiKey, Accept: "application/json" } },
-  );
-  if (!res.ok) {
-    if (res.status === 404) throw new Error(`No market data found for ZIP ${zip}`);
-    if (res.status === 401 || res.status === 403) {
-      throw new Error(
-        "RentCast rejected the request — the API key needs an active subscription on app.rentcast.io.",
-      );
-    }
-    if (res.status === 429) throw new Error("RentCast rate limit reached — try again shortly.");
-    throw new Error(`RentCast request failed (${res.status})`);
-  }
-  return (await res.json()) as RentcastMarket;
-}
 
 export async function generateAreaProfile(zip: string, context: string): Promise<{ bullets: string[]; tags: string[]; name: string }> {
   const apiKey = process.env["LOVABLE_API_KEY"];
