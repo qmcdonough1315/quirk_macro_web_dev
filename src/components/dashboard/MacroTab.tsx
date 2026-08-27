@@ -109,13 +109,7 @@ export function MacroTab() {
   const ticker = data
     ? [
         {
-          label: "30Y Fixed Mortgage",
-          value: `${data.mortgage.latest.toFixed(2)}%`,
-          change: bps(data.mortgage.changeBps),
-          up: data.mortgage.changeBps >= 0,
-          upIsGood: false,
-        },
-        {
+
           label: "10Y Treasury Yield",
           value: `${data.treasury.latest.toFixed(2)}%`,
           change: bps(data.treasury.changeBps),

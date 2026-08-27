@@ -107,7 +107,7 @@ function sampleListings(zip: string, ctx: HotContext): HotProperty[] {
 
 export async function getHotListings(zip: string, ctx: HotContext): Promise<HotResult> {
   try {
-    const properties = await fetchRentcastListings(zip);
+    const properties = await fetchLiveListings(zip);
     return { properties, source: "live" };
   } catch {
     return { properties: sampleListings(zip, ctx), source: "sample" };
