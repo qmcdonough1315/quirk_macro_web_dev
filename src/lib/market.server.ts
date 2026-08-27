@@ -523,7 +523,8 @@ const CURVE_SERIES: { id: string; tenor: string; months: number }[] = [
  * easing or tightening is priced for the next policy meeting.
  */
 function impliedProbabilities(fedFunds: number, threeMonth: number): RateProbability[] {
-  const gapBps = (threeMonth - fedFunds) * 100;
+  // ~10 bps of average bill term premium is not a policy expectation
+  const gapBps = (threeMonth - fedFunds) * 100 - 10;
   // 25 bps move fully priced when the 3M bill sits a full quarter-point away.
   const cut = Math.max(0, Math.min(1, -gapBps / 25));
   const hike = Math.max(0, Math.min(1, gapBps / 25));
