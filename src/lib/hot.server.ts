@@ -1,4 +1,6 @@
-/** Server-only helper: "Hot Properties" — live RentCast listings with a structured sample fallback. */
+/** Server-only helper: "Hot Properties" — live RealtyAPI (Redfin) listings with a sample fallback. */
+
+import { fetchRealtySaleListings } from "./realty.server";
 
 export interface HotProperty {
   id: string;
@@ -24,55 +26,32 @@ export interface HotResult {
   source: "live" | "sample";
 }
 
-interface RentcastListing {
-  id?: string;
-  formattedAddress?: string;
-  addressLine1?: string;
-  city?: string;
-  state?: string;
-  price?: number;
-  bedrooms?: number;
-  bathrooms?: number;
-  squareFootage?: number;
-  daysOnMarket?: number;
-  listedDate?: string;
-}
+async function fetchLiveListings(zip: string): Promise<HotProperty[]> {
+  const { listings } = await fetchRealtySaleListings(zip, 24);
+  if (!listings.length) throw new Error(`No active listings for ${zip}`);
 
-async function fetchRentcastListings(zip: string): Promise<HotProperty[]> {
-  const apiKey = process.env["RENTCAST_API_KEY"];
-  if (!apiKey) throw new Error("RENTCAST_API_KEY is not configured");
-
-  const res = await fetch(
-    `https://api.rentcast.io/v1/listings/sale?zipCode=${encodeURIComponent(zip)}&status=Active&limit=12`,
-    { headers: { "X-Api-Key": apiKey, Accept: "application/json" } },
-  );
-  if (!res.ok) throw new Error(`RentCast listings request failed (${res.status})`);
-  const json = (await res.json()) as RentcastListing[];
-  if (!Array.isArray(json) || !json.length) throw new Error(`No active listings for ${zip}`);
-
-  return json
+  return listings
     .slice()
     .sort((a, b) => (a.daysOnMarket ?? 999) - (b.daysOnMarket ?? 999))
     .slice(0, 6)
-    .map((l, i) => ({
-      id: l.id ?? `${zip}-${i}`,
-      address:
-        l.formattedAddress ?? [l.addressLine1, l.city, l.state].filter(Boolean).join(", "),
-      price: l.price ?? 0,
-      beds: l.bedrooms ?? null,
-      baths: l.bathrooms ?? null,
-      sqft: l.squareFootage ?? null,
-      daysOnMarket: l.daysOnMarket ?? null,
+    .map((l) => ({
+      id: l.id,
+      address: l.address,
+      price: l.price,
+      beds: l.beds,
+      baths: l.baths,
+      sqft: l.sqft,
+      daysOnMarket: l.daysOnMarket,
       views24h: null,
-      badge:
-        (l.daysOnMarket ?? 99) <= 2
+      badge: l.openHouse
+        ? "Open house"
+        : (l.daysOnMarket ?? 99) <= 2
           ? "New listing"
           : (l.daysOnMarket ?? 99) <= 7
             ? "High interest"
             : "Trending",
-      listedAt: l.listedDate ?? null,
-    }))
-    .filter((p) => p.price > 0 && p.address.length > 0);
+      listedAt: l.listedAt,
+    }));
 }
 
 /** Deterministic PRNG so sample cards are stable for a given ZIP. */
@@ -85,6 +64,7 @@ function mulberry32(seed: number) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
+
 
 const STREETS = [
   "Maple Ave",
@@ -127,7 +107,7 @@ function sampleListings(zip: string, ctx: HotContext): HotProperty[] {
 
 export async function getHotListings(zip: string, ctx: HotContext): Promise<HotResult> {
   try {
-    const properties = await fetchRentcastListings(zip);
+    const properties = await fetchLiveListings(zip);
     return { properties, source: "live" };
   } catch {
     return { properties: sampleListings(zip, ctx), source: "sample" };

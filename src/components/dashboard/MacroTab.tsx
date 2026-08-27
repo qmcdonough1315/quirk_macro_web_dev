@@ -109,13 +109,7 @@ export function MacroTab() {
   const ticker = data
     ? [
         {
-          label: "30Y Fixed Mortgage",
-          value: `${data.mortgage.latest.toFixed(2)}%`,
-          change: bps(data.mortgage.changeBps),
-          up: data.mortgage.changeBps >= 0,
-          upIsGood: false,
-        },
-        {
+
           label: "10Y Treasury Yield",
           value: `${data.treasury.latest.toFixed(2)}%`,
           change: bps(data.treasury.changeBps),
@@ -190,7 +184,7 @@ export function MacroTab() {
       {/* Top ticker */}
       <section className="panel flex flex-wrap divide-x divide-border/70">
         {isPending
-          ? Array.from({ length: 4 }).map((_, i) => (
+          ? Array.from({ length: 3 }).map((_, i) => (
               <div key={i} className="min-w-[170px] flex-1 px-5 py-4">
                 <div className="h-3 w-20 animate-pulse rounded bg-secondary" />
                 <div className="mt-2.5 h-5 w-16 animate-pulse rounded bg-secondary" />
@@ -222,7 +216,7 @@ export function MacroTab() {
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {isPending
-          ? Array.from({ length: 4 }).map((_, i) => (
+          ? Array.from({ length: 3 }).map((_, i) => (
               <div key={i} className="panel h-[132px] animate-pulse p-5" />
             ))
           : metrics.map((metric) => {
