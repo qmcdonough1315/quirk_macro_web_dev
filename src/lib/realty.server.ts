@@ -38,7 +38,7 @@ const median = (values: number[]): number | undefined => {
 // --- Redfin market trends -------------------------------------------------
 
 interface TrendsResponse {
-  regionName?: string;
+  regionName?: string | undefined;
   sections?: {
     section?: string;
     metrics?: {
@@ -50,19 +50,19 @@ interface TrendsResponse {
 }
 
 export interface RealtyMarket {
-  regionName?: string;
-  medianPrice?: number;
-  priceYoYPct?: number;
-  medianDom?: number;
-  homesSold?: number;
-  priceDropSharePct?: number;
-  saleToListPct?: number;
-  soldAboveListPct?: number;
-  pricePerSqFt?: number;
-  totalListings?: number;
-  newListings?: number;
-  medianRent?: number;
-  rentalListings?: number;
+  regionName?: string | undefined;
+  medianPrice?: number | undefined;
+  priceYoYPct?: number | undefined;
+  medianDom?: number | undefined;
+  homesSold?: number | undefined;
+  priceDropSharePct?: number | undefined;
+  saleToListPct?: number | undefined;
+  soldAboveListPct?: number | undefined;
+  pricePerSqFt?: number | undefined;
+  totalListings?: number | undefined;
+  newListings?: number | undefined;
+  medianRent?: number | undefined;
+  rentalListings?: number | undefined;
 }
 
 export interface RealtyListing {
@@ -134,7 +134,7 @@ function readTrends(json: TrendsResponse): RealtyMarket {
   return out;
 }
 
-export async function fetchRealtySaleListings(zip: string, count = 40): Promise<{ listings: RealtyListing[]; total?: number }> {
+export async function fetchRealtySaleListings(zip: string, count = 40): Promise<{ listings: RealtyListing[]; total?: number | undefined }> {
   const json = await realtyFetch<RedfinSearchResponse>("redfin", "/search/bylocation", {
     locationName: zip,
     searchType: "For_Sale",
@@ -166,7 +166,7 @@ export async function fetchRealtySaleListings(zip: string, count = 40): Promise<
   return { listings, total: json.total ?? json.resultCount };
 }
 
-async function fetchMedianRent(zip: string): Promise<{ medianRent?: number; rentalListings?: number }> {
+async function fetchMedianRent(zip: string): Promise<{ medianRent?: number | undefined; rentalListings?: number }> {
   try {
     const json = await realtyFetch<AptSearchResponse>("apartments", "/search/byzip", {
       zipCode: zip,
