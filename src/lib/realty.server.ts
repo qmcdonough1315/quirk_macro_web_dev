@@ -163,7 +163,7 @@ export async function fetchRealtySaleListings(zip: string, count = 40): Promise<
     })
     .filter((l): l is RealtyListing => l !== null);
 
-  return { listings, total: json.total ?? json.resultCount };
+  return { listings, total: json.total };
 }
 
 async function fetchMedianRent(zip: string): Promise<{ medianRent?: number | undefined; rentalListings?: number | undefined }> {

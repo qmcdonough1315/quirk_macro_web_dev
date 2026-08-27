@@ -222,9 +222,9 @@ export async function buildLocalMarket(zipInput: string): Promise<LocalMarketLiv
       { label: "Median Sale Price", value: usd(medianPrice), detail: `${pct(priceYoY)} YoY` },
       { label: "Price per Sq Ft", value: usd(ppsf), detail: "active Redfin listings" },
       {
-        label: "Active Listings",
-        value: market.totalListings?.toLocaleString("en-US") ?? "—",
-        detail: `${market.newListings ?? "—"} new this week`,
+        label: "Homes with Price Cuts",
+        value: typeof market.priceDropSharePct === "number" ? `${market.priceDropSharePct.toFixed(1)}%` : "—",
+        detail: `${market.newListings ?? "—"} new listings this week`,
       },
       {
         label: "Median Days on Market",
