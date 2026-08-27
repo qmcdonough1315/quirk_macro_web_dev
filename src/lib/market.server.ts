@@ -1,4 +1,7 @@
-/** Server-only helpers for FRED, RentCast and the AI area-profile summary. */
+/** Server-only helpers for FRED, RealtyAPI and the AI area-profile summary. */
+
+import { fetchRealtyMarket } from "./realty.server";
+
 
 export interface SeriesPoint {
   date: string;
@@ -178,7 +181,7 @@ export async function buildLocalMarket(zipInput: string): Promise<LocalMarketLiv
   const medianRent = market.medianRent;
   const ppsf = market.pricePerSqFt;
   const priceYoY = market.priceYoYPct;
-  const rentYoY = undefined as number | undefined;
+  
 
   const priceToRent =
     medianPrice && medianRent ? medianPrice / (medianRent * 12) : undefined;
