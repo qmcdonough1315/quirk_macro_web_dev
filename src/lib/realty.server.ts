@@ -75,6 +75,7 @@ export interface RealtyListing {
   daysOnMarket: number | null;
   listedAt: string | null;
   openHouse: boolean;
+  url: string | null;
 }
 
 interface RedfinSearchResponse {
@@ -88,6 +89,7 @@ interface RedfinSearchResponse {
       priceInfo?: { amount?: string };
       sqftInfo?: { amount?: string };
       daysOnMarket?: { daysOnMarket?: string; listingAddedDate?: string };
+      url?: string;
       sashes?: { sashTypeName?: string }[];
       addressInfo?: {
         formattedStreetLine?: string;
@@ -158,6 +160,7 @@ export async function fetchRealtySaleListings(zip: string, count = 40): Promise<
         sqft: num(h.sqftInfo?.amount) ?? null,
         daysOnMarket: num(h.daysOnMarket?.daysOnMarket) ?? null,
         listedAt: h.daysOnMarket?.listingAddedDate ?? null,
+        url: h.url ? (h.url.startsWith("http") ? h.url : `https://www.redfin.com${h.url}`) : null,
         openHouse: (h.sashes ?? []).some((s) => (s.sashTypeName ?? "").toLowerCase().includes("open house")),
       };
     })
