@@ -5,6 +5,7 @@ import {
   fetchMacroSnapshot,
   generateEconCalendar,
   generateMacroRecap,
+  fetchRatesOutlook,
   type MacroContextInput,
 } from "./market.server";
 
@@ -26,4 +27,8 @@ export const getMacroRecap = createServerFn({ method: "POST" })
 
 export const getEconCalendar = createServerFn({ method: "GET" }).handler(async () => {
   return await generateEconCalendar();
+});
+
+export const getRatesOutlook = createServerFn({ method: "GET" }).handler(async () => {
+  return await fetchRatesOutlook();
 });

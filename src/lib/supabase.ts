@@ -32,6 +32,32 @@ export type LocationSuggestion =
   | { kind: "city"; city: string; state: string | null; zipCount: number };
 
 /** Strip ilike-pattern metacharacters so user input can't break the query. */
+/**
+ * Normalize common aliases so "DC", "D.C." and "Washington DC" all resolve to
+ * the same city record.
+ */
+const DC_ALIASES = new Set([
+  "dc",
+  "d.c.",
+  "d c",
+  "d.c",
+  "washington dc",
+  "washington d.c.",
+  "washington d c",
+  "washington, dc",
+  "washington, d.c.",
+  "washington district of columbia",
+  "district of columbia",
+]);
+
+export function normalizeCityTerm(term: string): string {
+  const key = term.toLowerCase().replace(/\s+/g, " ").trim().replace(/[,]/g, "");
+  const keyDotless = key.replace(/\./g, "");
+  if (DC_ALIASES.has(key) || DC_ALIASES.has(keyDotless) || DC_ALIASES.has(key.replace(/\s/g, "")))
+    return "Washington";
+  return term;
+}
+
 const clean = (s: string) => s.replace(/[%_,()"]/g, " ").replace(/\s+/g, " ").trim();
 
 /**
@@ -39,7 +65,7 @@ const clean = (s: string) => s.replace(/[%_,()"]/g, " ").replace(/\s+/g, " ").tr
  * city names (city / city_search) and groups matches into city suggestions.
  */
 export async function searchLocations(term: string): Promise<LocationSuggestion[]> {
-  const q = clean(term);
+  const q = clean(normalizeCityTerm(term));
   if (!q) return [];
 
   if (/^\d{1,5}$/.test(q)) {
@@ -105,7 +131,7 @@ export async function fetchZipRow(zip: string): Promise<ZipRow> {
 
 /** Fetch every ZIP row belonging to a city (exact match first, then fuzzy). */
 export async function fetchCityRows(city: string): Promise<ZipRow[]> {
-  const q = clean(city);
+  const q = clean(normalizeCityTerm(city));
   if (!q) return [];
   const exact = await supabase
     .from("zip_data")

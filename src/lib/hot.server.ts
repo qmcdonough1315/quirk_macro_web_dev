@@ -13,6 +13,7 @@ export interface HotProperty {
   views24h: number | null;
   badge: string;
   listedAt: string | null;
+  url: string;
 }
 
 export interface HotContext {
@@ -51,7 +52,14 @@ async function fetchLiveListings(zip: string): Promise<HotProperty[]> {
             ? "High interest"
             : "Trending",
       listedAt: l.listedAt,
+      url: l.url ?? zillowSearchUrl(l.address),
     }));
+}
+
+/** Fallback deep link: Zillow resolves a full address string to the listing page. */
+function zillowSearchUrl(address: string) {
+  const slug = address.replace(/,/g, "").trim().replace(/\s+/g, "-");
+  return `https://www.zillow.com/homes/${encodeURIComponent(slug)}_rb/`;
 }
 
 /** Deterministic PRNG so sample cards are stable for a given ZIP. */
@@ -101,6 +109,7 @@ function sampleListings(zip: string, ctx: HotContext): HotProperty[] {
       views24h: 60 + Math.floor(rnd() * 420),
       badge: BADGES[Math.floor(rnd() * BADGES.length)]!,
       listedAt: null,
+      url: `https://www.redfin.com/zipcode/${zip}`,
     };
   });
 }

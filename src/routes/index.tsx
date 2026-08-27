@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Activity } from "lucide-react";
 
 import { MacroTab } from "@/components/dashboard/MacroTab";
+import { HousingTab } from "@/components/dashboard/HousingTab";
 import { LocalTab } from "@/components/dashboard/LocalTab";
 
 export const Route = createFileRoute("/")({
@@ -28,12 +29,13 @@ export const Route = createFileRoute("/")({
 });
 
 const tabs = [
+  { id: "housing", label: "Housing Data" },
   { id: "macros", label: "Get Your Macros" },
   { id: "local", label: "Local Market Explorer" },
 ] as const;
 
 function Dashboard() {
-  const [tab, setTab] = useState<(typeof tabs)[number]["id"]>("macros");
+  const [tab, setTab] = useState<(typeof tabs)[number]["id"]>("housing");
 
   return (
     <div className="min-h-screen grid-backdrop">
@@ -52,10 +54,6 @@ function Dashboard() {
               </p>
             </div>
           </div>
-          <span className="ml-auto flex items-center gap-2 rounded-md border border-border px-3 py-1.5 font-mono text-xs text-muted-foreground">
-            <span className="size-1.5 animate-pulse rounded-full bg-positive" />
-            LIVE · 14 AUG 2026
-          </span>
         </div>
 
         <div className="mx-auto max-w-7xl px-6">
@@ -80,7 +78,7 @@ function Dashboard() {
       </header>
 
       <main className="mx-auto max-w-7xl px-6 py-8">
-        {tab === "macros" ? <MacroTab /> : <LocalTab />}
+        {tab === "housing" ? <HousingTab /> : tab === "macros" ? <MacroTab /> : <LocalTab />}
       </main>
 
       <footer className="border-t border-border/70">
