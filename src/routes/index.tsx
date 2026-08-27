@@ -32,6 +32,7 @@ const tabs = [
   { id: "housing", label: "Housing Data" },
   { id: "macros", label: "Get Your Macros" },
   { id: "local", label: "Local Market Explorer" },
+  { id: "factors", label: "Factor Beta Predictions" },
 ] as const;
 
 function Dashboard() {
