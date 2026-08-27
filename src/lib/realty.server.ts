@@ -166,7 +166,7 @@ export async function fetchRealtySaleListings(zip: string, count = 40): Promise<
   return { listings, total: json.total ?? json.resultCount };
 }
 
-async function fetchMedianRent(zip: string): Promise<{ medianRent?: number | undefined; rentalListings?: number }> {
+async function fetchMedianRent(zip: string): Promise<{ medianRent?: number | undefined; rentalListings?: number | undefined }> {
   try {
     const json = await realtyFetch<AptSearchResponse>("apartments", "/search/byzip", {
       zipCode: zip,
