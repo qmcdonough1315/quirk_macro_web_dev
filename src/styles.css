@@ -60,47 +60,49 @@
 }
 
 :root {
-  --radius: 0.5rem;
-  --background: oklch(0.16 0.012 250);
-  --foreground: oklch(0.95 0.005 250);
-  --surface: oklch(0.205 0.014 252);
-  --card: oklch(0.203 0.014 252);
-  --card-foreground: oklch(0.95 0.005 250);
-  --popover: oklch(0.203 0.014 252);
-  --popover-foreground: oklch(0.95 0.005 250);
-  --primary: oklch(0.78 0.13 190);
-  --primary-foreground: oklch(0.17 0.014 250);
-  --secondary: oklch(0.26 0.015 252);
-  --secondary-foreground: oklch(0.93 0.005 250);
-  --muted: oklch(0.26 0.015 252);
-  --muted-foreground: oklch(0.68 0.012 250);
-  --accent: oklch(0.8 0.14 188);
-  --accent-foreground: oklch(0.17 0.014 250);
-  --destructive: oklch(0.63 0.2 22);
-  --destructive-foreground: oklch(0.97 0.005 250);
-  --positive: oklch(0.75 0.17 155);
-  --negative: oklch(0.66 0.2 22);
-  --warning: oklch(0.8 0.15 82);
-  --border: oklch(0.29 0.014 252);
-  --input: oklch(0.29 0.014 252);
-  --ring: oklch(0.8 0.14 188);
-  --chart-1: oklch(0.8 0.14 188);
-  --chart-2: oklch(0.78 0.15 82);
-  --chart-3: oklch(0.75 0.17 155);
-  --chart-4: oklch(0.66 0.2 22);
-  --chart-5: oklch(0.7 0.13 280);
-  --sidebar: oklch(0.19 0.013 252);
-  --sidebar-foreground: oklch(0.95 0.005 250);
-  --sidebar-primary: oklch(0.8 0.14 188);
-  --sidebar-primary-foreground: oklch(0.17 0.014 250);
-  --sidebar-accent: oklch(0.26 0.015 252);
-  --sidebar-accent-foreground: oklch(0.95 0.005 250);
-  --sidebar-border: oklch(0.29 0.014 252);
-  --sidebar-ring: oklch(0.8 0.14 188);
+  --radius: 0.625rem;
+  /* Whimsical-but-serious light theme drawn from the Quirk "Q" brand mark:
+     blush pink canvas, coral primary, violet depth, teal + gold accents. */
+  --background: oklch(0.972 0.014 20);
+  --foreground: oklch(0.3 0.07 305);
+  --surface: oklch(0.955 0.02 20);
+  --card: oklch(0.99 0.007 25);
+  --card-foreground: oklch(0.3 0.07 305);
+  --popover: oklch(0.99 0.007 25);
+  --popover-foreground: oklch(0.3 0.07 305);
+  --primary: oklch(0.63 0.22 15);
+  --primary-foreground: oklch(0.985 0.005 20);
+  --secondary: oklch(0.93 0.035 330);
+  --secondary-foreground: oklch(0.42 0.16 310);
+  --muted: oklch(0.945 0.02 20);
+  --muted-foreground: oklch(0.5 0.045 305);
+  --accent: oklch(0.5 0.21 300);
+  --accent-foreground: oklch(0.985 0.005 20);
+  --destructive: oklch(0.58 0.22 22);
+  --destructive-foreground: oklch(0.985 0.005 20);
+  --positive: oklch(0.62 0.15 155);
+  --negative: oklch(0.6 0.22 22);
+  --warning: oklch(0.75 0.15 82);
+  --border: oklch(0.905 0.028 15);
+  --input: oklch(0.905 0.028 15);
+  --ring: oklch(0.63 0.22 15);
+  --chart-1: oklch(0.63 0.22 15);
+  --chart-2: oklch(0.78 0.16 85);
+  --chart-3: oklch(0.62 0.15 155);
+  --chart-4: oklch(0.6 0.22 22);
+  --chart-5: oklch(0.55 0.19 300);
+  --sidebar: oklch(0.955 0.02 20);
+  --sidebar-foreground: oklch(0.3 0.07 305);
+  --sidebar-primary: oklch(0.63 0.22 15);
+  --sidebar-primary-foreground: oklch(0.985 0.005 20);
+  --sidebar-accent: oklch(0.93 0.035 330);
+  --sidebar-accent-foreground: oklch(0.42 0.16 310);
+  --sidebar-border: oklch(0.905 0.028 15);
+  --sidebar-ring: oklch(0.63 0.22 15);
 }
 
 .dark {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 @layer base {
@@ -109,7 +111,7 @@
   }
 
   html {
-    color-scheme: dark;
+    color-scheme: light;
   }
 
   body {
@@ -136,7 +138,7 @@
   background-color: var(--card);
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
-  box-shadow: 0 18px 40px -28px oklch(0 0 0 / 0.8);
+  box-shadow: 0 18px 40px -28px oklch(0.42 0.12 310 / 0.35);
 }
 
 @utility label-caps {
