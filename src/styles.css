@@ -63,18 +63,18 @@
   --radius: 0.625rem;
   /* Whimsical-but-serious light theme drawn from the Quirk "Q" brand mark:
      blush pink canvas, coral primary, violet depth, teal + gold accents. */
-  --background: oklch(0.972 0.014 20);
+  --background: oklch(0.97 0.009 25);
   --foreground: oklch(0.3 0.07 305);
-  --surface: oklch(0.955 0.02 20);
-  --card: oklch(0.99 0.007 25);
+  --surface: oklch(0.955 0.012 25);
+  --card: oklch(0.985 0.005 25);
   --card-foreground: oklch(0.3 0.07 305);
-  --popover: oklch(0.99 0.007 25);
+  --popover: oklch(0.985 0.005 25);
   --popover-foreground: oklch(0.3 0.07 305);
-  --primary: oklch(0.63 0.22 15);
+  --primary: oklch(0.61 0.25 15);
   --primary-foreground: oklch(0.985 0.005 20);
-  --secondary: oklch(0.93 0.035 330);
+  --secondary: oklch(0.93 0.028 330);
   --secondary-foreground: oklch(0.42 0.16 310);
-  --muted: oklch(0.945 0.02 20);
+  --muted: oklch(0.945 0.012 25);
   --muted-foreground: oklch(0.5 0.045 305);
   --accent: oklch(0.5 0.21 300);
   --accent-foreground: oklch(0.985 0.005 20);
@@ -85,20 +85,20 @@
   --warning: oklch(0.75 0.15 82);
   --border: oklch(0.905 0.028 15);
   --input: oklch(0.905 0.028 15);
-  --ring: oklch(0.63 0.22 15);
-  --chart-1: oklch(0.63 0.22 15);
+  --ring: oklch(0.61 0.25 15);
+  --chart-1: oklch(0.61 0.25 15);
   --chart-2: oklch(0.78 0.16 85);
   --chart-3: oklch(0.62 0.15 155);
   --chart-4: oklch(0.6 0.22 22);
   --chart-5: oklch(0.55 0.19 300);
-  --sidebar: oklch(0.955 0.02 20);
+  --sidebar: oklch(0.955 0.012 25);
   --sidebar-foreground: oklch(0.3 0.07 305);
-  --sidebar-primary: oklch(0.63 0.22 15);
+  --sidebar-primary: oklch(0.61 0.25 15);
   --sidebar-primary-foreground: oklch(0.985 0.005 20);
-  --sidebar-accent: oklch(0.93 0.035 330);
+  --sidebar-accent: oklch(0.93 0.028 330);
   --sidebar-accent-foreground: oklch(0.42 0.16 310);
   --sidebar-border: oklch(0.905 0.028 15);
-  --sidebar-ring: oklch(0.63 0.22 15);
+  --sidebar-ring: oklch(0.61 0.25 15);
 }
 
 .dark {
