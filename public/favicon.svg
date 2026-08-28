@@ -1,0 +1,115 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="100%" height="100%">
+  <defs>
+    <!-- Background Gradient -->
+    <radialGradient id="bgGlow" cx="50%" cy="50%" r="75%">
+      <stop offset="0%" stop-color="#FFF0F5" />
+      <stop offset="60%" stop-color="#FFE4E1" />
+      <stop offset="100%" stop-color="#FFD1DC" />
+    </radialGradient>
+
+    <!-- Vibrant Gradient for Q Main Body -->
+    <linearGradient id="qGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF3366" />
+      <stop offset="40%" stop-color="#FF6B6B" />
+      <stop offset="80%" stop-color="#FFA07A" />
+      <stop offset="100%" stop-color="#FFD700" />
+    </linearGradient>
+
+    <!-- Gradient for Q Inner Counter/Hole -->
+    <linearGradient id="innerHole" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7B2CBF" />
+      <stop offset="50%" stop-color="#5A189A" />
+      <stop offset="100%" stop-color="#3C096C" />
+    </linearGradient>
+
+    <!-- Gradient for Squiggly Tail -->
+    <linearGradient id="tailGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00F5D4" />
+      <stop offset="50%" stop-color="#00BBF9" />
+      <stop offset="100%" stop-color="#4B0082" />
+    </linearGradient>
+
+    <!-- Drop Shadow Filter for Pop Effect -->
+    <filter id="popShadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="10" dy="14" stdDeviation="0" flood-color="#1A0933" flood-opacity="0.8" />
+    </filter>
+    
+    <filter id="softGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="8" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- 1:1 Aspect Ratio Canvas -->
+  <rect width="500" height="500" rx="40" fill="url(#bgGlow)" />
+
+  <!-- Background Quirky Shapes & Confetti -->
+  <g id="background-decorations">
+    <!-- Wavy background accents -->
+    <path d="M -20,100 C 100,50 200,180 350,80 C 420,35 480,90 520,60" stroke="#FFD166" stroke-width="16" stroke-linecap="round" fill="none" opacity="0.6"/>
+    <path d="M -10,400 C 120,350 180,480 320,420 C 400,380 450,460 520,410" stroke="#06D6A0" stroke-width="12" stroke-linecap="round" fill="none" opacity="0.5"/>
+
+    <!-- Geometric Confetti -->
+    <circle cx="80" cy="100" r="14" fill="#FF477E" filter="url(#softGlow)"/>
+    <circle cx="420" cy="120" r="22" fill="#00BBF9" />
+    <circle cx="70" cy="380" r="18" fill="#FFB703" />
+    <rect x="390" y="360" width="25" height="25" rx="6" fill="#702283" transform="rotate(25 402 372)" />
+    <rect x="110" y="240" width="18" height="18" rx="4" fill="#06D6A0" transform="rotate(-15 119 249)" />
+    
+    <!-- Quirky Zigzags -->
+    <path d="M 380,220 L 395,210 L 410,220 L 425,210 L 440,220" stroke="#FF007F" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    <path d="M 60,180 L 72,170 L 84,180 L 96,170" stroke="#4CC9F0" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  </g>
+
+  <!-- MAIN LETTER "Q" GROUP -->
+  <g id="letter-Q" filter="url(#popShadow)">
+    
+    <!-- Outer Main Body of Q -->
+    <path d="M 230,80 
+             C 120,80 60,150 60,260 
+             C 60,370 130,430 240,430 
+             C 310,430 370,390 400,330 
+             C 430,260 410,130 340,90 
+             C 300,65 265,80 230,80 Z" 
+          fill="url(#qGradient)" 
+          stroke="#1A0933" 
+          stroke-width="12" 
+          stroke-linejoin="round" />
+
+    <!-- Inner Oval Hole -->
+    <path d="M 235,160 
+             C 280,160 310,195 310,255 
+             C 310,315 270,345 225,345 
+             C 175,345 150,310 150,250 
+             C 150,190 185,160 235,160 Z" 
+          fill="url(#innerHole)" 
+          stroke="#1A0933" 
+          stroke-width="10" />
+
+    <!-- Extra Squiggly Wave-Style Tail -->
+    <path d="M 270,320 
+             C 300,280 340,360 375,320 
+             C 410,280 435,370 455,410 
+             C 430,440 380,410 350,380 
+             C 320,350 290,370 270,320 Z" 
+          fill="url(#tailGradient)" 
+          stroke="#1A0933" 
+          stroke-width="10" 
+          stroke-linecap="round" 
+          stroke-linejoin="round" />
+
+  </g>
+
+  <!-- Foreground Gloss Highlights -->
+  <g id="foreground-details">
+    <path d="M 130,140 C 170,105 230,100 270,108" stroke="#FFFFFF" stroke-width="10" stroke-linecap="round" fill="none" opacity="0.8" />
+    <circle cx="106" cy="180" r="6" fill="#FFFFFF" opacity="0.8" />
+    
+    <!-- Squiggly Tail Gloss Highlight -->
+    <path d="M 320,340 C 350,310 380,360 410,340" stroke="#FFF" stroke-width="6" stroke-linecap="round" fill="none" opacity="0.7" />
+
+    <!-- Floating Sparkles -->
+    <path d="M 160,50 L 165,65 L 180,70 L 165,75 L 160,90 L 155,75 L 140,70 L 155,65 Z" fill="#FFD166" />
+    <path d="M 430,230 L 434,240 L 445,244 L 434,248 L 430,258 L 426,248 L 415,244 L 426,240 Z" fill="#00F5D4" />
+  </g>
+</svg>
