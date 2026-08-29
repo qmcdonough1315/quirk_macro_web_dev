@@ -1,54 +1,41 @@
-# Quirk Macro Insights
+# 📈 QuirkMacro | Financial Intelligence & Macro Analytics Dashboard
 
-Build an institutional-grade, dark-mode financial dashboard called 'Quirk Macro Analytics'. Use a sleek typography hierarchy, clean card layouts, and responsive charts.
+**QuirkMacro** is a custom, high-density financial intelligence platform built to centralize macroeconomic indicators, localized real estate trends, quantitative factor models, and short-term yield optimization.
 
-The UI must have two main tabs:
+* **🔗 Live Platform Demo:** [quirkmacro.com](https://quirkmacro.com)
+* **🛠️ Tech Stack:** React (Vite), Tailwind CSS, Supabase (Database & APIs), Python (Data Pipelines), Cursor AI, Lovable
 
-TAB 1: 'Get Your Macros'
+---
 
-Hero Section: Key metrics bar across the top showing: 30-Year Fixed Mortgage Rate, 10-Year Treasury Yield, Primary/Secondary Rate Spread, and FHFA House Price Index (HPI) QoQ Change. Use green/red indicators for 30-day directional trends.
+## 🚀 Key Platform Modules & Tabs
 
-Rate & Yield Chart: A interactive line chart comparing the 10-Year Treasury Yield vs. Freddie Mac Weekly Mortgage Rates over the last 12 months.
+### 1. 📊 Get Your Macros
+* **Purpose:** Centralizes fragmented macroeconomic datasets (FRED, Federal Reserve releases, inflation indices, and government reports) into a single high-density dashboard.
+* **Key Components:** 10Y Treasury Yield tracking, GDP Growth (QoQ annualized), Core PCE, the Treasury Yield Curve, Atlanta Fed rate cut/hike probabilities, a past week economic recap, and a 7-day upcoming release calendar.
 
-Market Dynamics Panel: Cards for 'Lending & Credit Conditions', 'Liquidity Indicators', and an overall 'Buyer vs. Seller Advantage Scorecard' (a sliding gauge from Strong Buyer Market to Strong Seller Market).
+### 2. 🏠 Housing Data
+* **Purpose:** Isolates macro housing metrics and interest rate conditions to evaluate overall real estate lending and market dynamics.
+* **Key Components:** 30Y Fixed Mortgage Rates, Primary/Secondary Spreads, FHFA House Price Index (QoQ), Trailing 12-Month Rates & Yields chart, Liquidity Indicators, and Buyer vs. Seller Advantage signals.
 
-Data Source Bar: Subtle footer note stating: 'Data powered by FRED API, U.S. Treasury, and FHFA.'
+### 3. 📍 Local Market Explorer
+* **Purpose:** Bypasses clunky, transactional real estate scrolling to deliver rapid, on-the-go geographical trend snapshots via ZIP Code or City search (including dual mapping for Washington, DC).
+* **Key Components:** Micro-market pricing metrics, local inventory velocity, neighborhood AI summaries, and hyperlinked "Hot Properties" driving traffic directly to live listings on Redfin, Zillow, or Realtor.com.
 
-TAB 2: 'Local Market Explorer'
+### 4. 🧬 Factor Beta Predictions
+* **Purpose:** Bridges academic quantitative finance and practical portfolio allocation by modeling asset exposure to baseline risk factors.
+* **Key Components:** 3-month predicted factor excess returns (Mkt-Rf, SMB, HML, RMW, CMA, WML), a 10-ETF hold-period portfolio with target weights and Sharpe ratio estimates, an AI macro regime summary, and historical performance tracking.
 
-Search Bar: A prominent ZIP code or City/Town search bar with a submit button. Make it look sleek.
+### 5. 💵 Cash Manager Engine
+* **Purpose:** Eliminates yield drag on idle capital by automatically tracking and ranking short-duration Treasury and money market funds.
+* **Key Components:** A weekly leaderboard ranking top short-term liquidity funds by 30-Day SEC Yield, expense ratio comparisons, distribution frequencies, and direct trade action links.
 
-Grid Layout for Results (Placeholder mock data for ZIP 20007 / Georgetown, DC):
+---
 
-Key Stats Card: Median House Price, Price per Sq Ft, Median Household Income, Price-to-Income Ratio, Average building age.
+## 🛠️ System Architecture & Data Pipeline
+* **Frontend:** React scaffolded with Vite and styled using utility-first Tailwind CSS for clean, high-density financial layouts.
+* **Backend:** Supabase relational tables storing merged Census, real estate, and financial metric records.
+* **Automation:** Automated Python ingestion pipelines (`merge_data.py`) running via GitHub Actions to continuously update datasets on a weekly schedule.
 
-Local Vibe & Insights: An AI narrative summary card titled 'Area Profile & Local Vibe' (describing local culture, transit access, top amenities, and buyer demographic).
+---
 
-Rental & Yield Metrics: Median Rent, Estimated Cap Rate, Price-to-Rent Ratio.
-
-Affordability Gauge: Local Affordability Scorecard for average home buyers/renters. A prominent indicator that states whether it is a buyer market or a seller market.
-
-Use mock data for initial rendering so the entire dashboard renders fully populated on load.
-
-This project was built with [Lovable](https://lovable.dev).
-
-**Live app**: https://quirkmacro.lovable.app
-
-## Build with Lovable
-
-Continue developing this project in the [Lovable editor](https://lovable.dev/projects/dfb3d748-cd12-4930-a6e5-8e5857947bd7).
-
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: every change made in Lovable is committed straight to this repository.
-- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
-
-## Development
-
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
-
-```sh
-git clone <this-repository-url>
-cd <repository-name>
-npm i
-npm run dev
-```
+*Disclaimer: QuirkMacro is for informational and educational purposes only and does not constitute investment advice.*
