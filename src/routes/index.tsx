@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { Activity, ChevronDown, Home, TrendingUp, Wallet } from "lucide-react";
+import { Activity, ChevronDown, Home, Wallet } from "lucide-react";
 
 import { MacroTab } from "@/components/dashboard/MacroTab";
 import { HousingTab } from "@/components/dashboard/HousingTab";
