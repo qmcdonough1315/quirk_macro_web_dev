@@ -274,11 +274,21 @@ function buildRun(date: string, allRows: RawRow[]): FactorBetaRow {
     .filter((w): w is { ticker: string; value: number } => w.value !== null);
   const weightSum = rawWeights.reduce((s, w) => s + Math.abs(w.value), 0);
   const wScale = weightSum > 0 && weightSum <= 1.5 ? 100 : 1;
+
+  const fundReturns = new Map<string, number>();
+  const rScale = scaleFactor(
+    fundReturnRows.map((r) => toNumber(r.value)).filter((n): n is number => n !== null),
+  );
+  for (const r of fundReturnRows) {
+    const v = toNumber(r.value);
+    if (v !== null) fundReturns.set(r.ticker_or_factor.trim().toUpperCase(), v * rScale);
+  }
+
   const portfolio: PortfolioHolding[] = rawWeights
     .map((w) => ({
       ticker: w.ticker,
       fund: fundName(w.ticker),
-      expectedReturn: null,
+      expectedReturn: fundReturns.get(w.ticker) ?? null,
       weight: w.value * wScale,
     }))
     .sort((a, b) => b.weight - a.weight);
