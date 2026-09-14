@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -15,8 +16,13 @@ import {
   type FactorBetaRow,
   type PortfolioHolding,
 } from "@/lib/factor-beta";
+import { getRegimeSummary } from "@/lib/factor-ai.functions";
 
-const pct = (n: number, digits = 2) => `${n > 0 ? "+" : ""}${n.toFixed(digits)}%`;
+const pct = (n: number | null | undefined, digits = 2) =>
+  typeof n === "number" && Number.isFinite(n) ? `${n > 0 ? "+" : ""}${n.toFixed(digits)}%` : "—";
+
+const plain = (n: number | null | undefined, digits = 2, suffix = "") =>
+  typeof n === "number" && Number.isFinite(n) ? `${n.toFixed(digits)}${suffix}` : "—";
 
 function DeltaBadge({ value }: { value: number }) {
   const good = value >= 0;
@@ -34,14 +40,15 @@ function DeltaBadge({ value }: { value: number }) {
 }
 
 function HoldingsTable({ holdings }: { holdings: PortfolioHolding[] }) {
+  const showReturn = holdings.some((h) => typeof h.expectedReturn === "number");
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[560px] text-sm">
+      <table className="w-full min-w-[520px] text-sm">
         <thead>
           <tr className="border-b border-border text-left">
             <th className="label-caps py-2.5 pr-4">Ticker</th>
             <th className="label-caps py-2.5 pr-4">Fund name</th>
-            <th className="label-caps py-2.5 pr-4 text-right">Exp. return</th>
+            {showReturn ? <th className="label-caps py-2.5 pr-4 text-right">Exp. return</th> : null}
             <th className="label-caps py-2.5 text-right">Weight</th>
           </tr>
         </thead>
@@ -49,12 +56,18 @@ function HoldingsTable({ holdings }: { holdings: PortfolioHolding[] }) {
           {holdings.map((h) => (
             <tr key={h.ticker} className="border-b border-border/50 last:border-0">
               <td className="py-3 pr-4 font-mono text-sm font-medium text-foreground">{h.ticker}</td>
-              <td className="py-3 pr-4 text-muted-foreground">{h.fund}</td>
-              <td className="py-3 pr-4 text-right font-mono tabular-nums">
-                <span className={h.expectedReturn >= 0 ? "text-positive" : "text-negative"}>
-                  {pct(h.expectedReturn)}
-                </span>
-              </td>
+              <td className="py-3 pr-4 text-muted-foreground">{h.fund || "—"}</td>
+              {showReturn ? (
+                <td className="py-3 pr-4 text-right font-mono tabular-nums">
+                  <span
+                    className={
+                      (h.expectedReturn ?? 0) >= 0 ? "text-positive" : "text-negative"
+                    }
+                  >
+                    {pct(h.expectedReturn)}
+                  </span>
+                </td>
+              ) : null}
               <td className="py-3 text-right">
                 <div className="flex items-center justify-end gap-2">
                   <span className="h-1.5 w-16 overflow-hidden rounded-full bg-secondary">
@@ -93,26 +106,27 @@ function PreviousRunCard({ run }: { run: FactorBetaRow }) {
         <span className="font-mono text-sm tabular-nums text-foreground">{run.as_of_date}</span>
         <span className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
           <span>
-            Predicted{" "}
-            <span className="font-mono text-foreground">{pct(run.expected_return)}</span>
+            Predicted <span className="font-mono text-foreground">{pct(run.expected_return)}</span>
           </span>
-          <span>
-            Realized{" "}
-            <span className="font-mono text-foreground">
-              {run.realized_return === null ? "—" : pct(run.realized_return)}
+          {run.realized_return !== null ? (
+            <span>
+              Realized <span className="font-mono text-foreground">{pct(run.realized_return)}</span>
             </span>
-          </span>
-          <span>
-            Benchmark{" "}
-            <span className="font-mono text-foreground">
-              {run.benchmark_return === null ? "—" : pct(run.benchmark_return)}
+          ) : null}
+          {run.benchmark_return !== null ? (
+            <span>
+              Benchmark{" "}
+              <span className="font-mono text-foreground">{pct(run.benchmark_return)}</span>
             </span>
-          </span>
-          <span>
-            Hit rate{" "}
-            <span className="font-mono text-foreground">
-              {run.hit_rate === null ? "—" : `${run.hit_rate.toFixed(0)}%`}
+          ) : null}
+          {run.hit_rate !== null ? (
+            <span>
+              Hit rate{" "}
+              <span className="font-mono text-foreground">{run.hit_rate.toFixed(0)}%</span>
             </span>
+          ) : null}
+          <span>
+            Holdings <span className="font-mono text-foreground">{run.portfolio.length}</span>
           </span>
         </span>
         <span className="ml-auto flex items-center gap-2">
@@ -124,7 +138,24 @@ function PreviousRunCard({ run }: { run: FactorBetaRow }) {
       </button>
       {open ? (
         <div className="border-t border-border/70 px-4 py-4">
-          <p className="mb-4 text-sm text-muted-foreground">{run.regime_summary}</p>
+          {run.regime_summary ? (
+            <p className="mb-4 text-sm text-muted-foreground">{run.regime_summary}</p>
+          ) : null}
+          {run.factors.length ? (
+            <div className="mb-4 flex flex-wrap gap-2">
+              {run.factors.map((f) => (
+                <span
+                  key={f.code}
+                  className="rounded-md border border-border/70 px-2 py-1 font-mono text-xs tabular-nums"
+                >
+                  <span className="text-muted-foreground">{f.code}</span>{" "}
+                  <span className={f.predicted >= 0 ? "text-positive" : "text-negative"}>
+                    {pct(f.predicted)}
+                  </span>
+                </span>
+              ))}
+            </div>
+          ) : null}
           <HoldingsTable holdings={run.portfolio} />
         </div>
       ) : null}
@@ -134,17 +165,44 @@ function PreviousRunCard({ run }: { run: FactorBetaRow }) {
 
 export function FactorBetaTab() {
   const { data, isPending } = useQuery({
-    queryKey: ["factor-beta-predictions"],
+    queryKey: ["factor-predictions"],
     queryFn: fetchFactorBetaData,
     staleTime: 5 * 60_000,
   });
 
   const current = data?.current;
+
+  const regimeFn = useServerFn(getRegimeSummary);
+  const { data: regime, isPending: regimePending } = useQuery({
+    queryKey: ["factor-regime-summary", current?.as_of_date, data?.live],
+    enabled: Boolean(current && data?.live),
+    staleTime: 60 * 60_000,
+    queryFn: () =>
+      regimeFn({
+        data: {
+          asOfDate: current!.as_of_date,
+          factors: current!.factors.map((f) => ({
+            code: f.code,
+            name: f.name,
+            predicted: f.predicted,
+          })),
+          holdings: current!.portfolio.map((h) => ({ ticker: h.ticker, weight: h.weight })),
+          expectedReturn: current!.expected_return,
+          expectedVol: current!.expected_vol,
+          expectedSharpe: current!.expected_sharpe,
+        },
+      }),
+  });
+
+  const summary = data?.live ? regime?.summary : current?.regime_summary;
+  const showPrior = (current?.factors ?? []).some((f) => f.prior !== null);
+  const showConfidence = (current?.factors ?? []).some((f) => f.confidence !== null);
+
   const stats = current
     ? [
         { label: "Total expected return", value: pct(current.expected_return), tone: "signed" },
-        { label: "Expected volatility", value: `${current.expected_vol.toFixed(1)}%`, tone: "flat" },
-        { label: "Expected Sharpe ratio", value: current.expected_sharpe.toFixed(2), tone: "flat" },
+        { label: "Expected volatility", value: plain(current.expected_vol, 1, "%"), tone: "flat" },
+        { label: "Expected Sharpe ratio", value: plain(current.expected_sharpe), tone: "flat" },
         { label: "Hold period", value: `${current.horizon_months} months`, tone: "flat" },
       ]
     : [];
@@ -162,12 +220,10 @@ export function FactorBetaTab() {
             {current ? ` · ${current.as_of_date}` : ""}
           </span>
         </div>
-        {isPending ? (
+        {isPending || (data?.live && regimePending) ? (
           <div className="h-20 animate-pulse rounded-lg bg-secondary/40" />
         ) : (
-          <p className="max-w-4xl text-sm leading-relaxed text-muted-foreground">
-            {current?.regime_summary}
-          </p>
+          <p className="max-w-4xl text-sm leading-relaxed text-muted-foreground">{summary}</p>
         )}
       </section>
 
@@ -182,14 +238,18 @@ export function FactorBetaTab() {
           <div className="h-56 animate-pulse rounded-lg bg-secondary/40" />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] text-sm">
+            <table className="w-full min-w-[560px] text-sm">
               <thead>
                 <tr className="border-b border-border text-left">
                   <th className="label-caps py-2.5 pr-4">Factor</th>
                   <th className="label-caps py-2.5 pr-4">Definition</th>
                   <th className="label-caps py-2.5 pr-4 text-right">Predicted</th>
-                  <th className="label-caps py-2.5 pr-4 text-right">Prior run</th>
-                  <th className="label-caps py-2.5 text-right">Confidence</th>
+                  {showPrior ? (
+                    <th className="label-caps py-2.5 pr-4 text-right">Prior run</th>
+                  ) : null}
+                  {showConfidence ? (
+                    <th className="label-caps py-2.5 text-right">Confidence</th>
+                  ) : null}
                 </tr>
               </thead>
               <tbody>
@@ -203,22 +263,26 @@ export function FactorBetaTab() {
                     <td className="py-3 pr-4 text-right">
                       <DeltaBadge value={f.predicted} />
                     </td>
-                    <td className="py-3 pr-4 text-right font-mono tabular-nums text-muted-foreground">
-                      {pct(f.prior)}
-                    </td>
-                    <td className="py-3 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <span className="h-1.5 w-16 overflow-hidden rounded-full bg-secondary">
-                          <span
-                            className="block h-full rounded-full bg-accent/70"
-                            style={{ width: `${f.confidence}%` }}
-                          />
-                        </span>
-                        <span className="w-9 font-mono tabular-nums text-foreground">
-                          {f.confidence}%
-                        </span>
-                      </div>
-                    </td>
+                    {showPrior ? (
+                      <td className="py-3 pr-4 text-right font-mono tabular-nums text-muted-foreground">
+                        {pct(f.prior)}
+                      </td>
+                    ) : null}
+                    {showConfidence ? (
+                      <td className="py-3 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <span className="h-1.5 w-16 overflow-hidden rounded-full bg-secondary">
+                            <span
+                              className="block h-full rounded-full bg-accent/70"
+                              style={{ width: `${f.confidence ?? 0}%` }}
+                            />
+                          </span>
+                          <span className="w-9 font-mono tabular-nums text-foreground">
+                            {f.confidence === null ? "—" : `${f.confidence}%`}
+                          </span>
+                        </div>
+                      </td>
+                    ) : null}
                   </tr>
                 ))}
               </tbody>
@@ -269,6 +333,7 @@ export function FactorBetaTab() {
           <h2 className="font-display text-base font-semibold tracking-tight">
             Previous Week Performance &amp; Asset Selections
           </h2>
+          <span className="label-caps ml-auto">Trailing 3 months</span>
         </div>
         {isPending ? (
           <div className="h-24 animate-pulse rounded-lg bg-secondary/40" />
@@ -279,9 +344,7 @@ export function FactorBetaTab() {
             ))}
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground">
-            No prior model runs recorded yet.
-          </p>
+          <p className="text-sm text-muted-foreground">No prior model runs recorded yet.</p>
         )}
       </section>
 
