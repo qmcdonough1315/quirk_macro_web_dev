@@ -97,15 +97,12 @@ export function AboutTab() {
             href="https://www.linkedin.com/in/quinnmcdonough"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded-lg bg-[#0A66C2]/12 px-4 py-2.5 font-display text-sm font-medium text-[#0A66C2] ring-1 ring-[#0A66C2]/30 transition-colors hover:bg-[#0A66C2]/20"
+            className="inline-flex items-center gap-2 rounded-lg bg-primary/12 px-4 py-2.5 font-display text-sm font-medium text-primary ring-1 ring-primary/30 transition-colors hover:bg-primary/20"
           >
             <Linkedin className="size-4" />
             LinkedIn
           </a>
         </div>
-        <p className="mt-3 text-xs text-muted-foreground">
-          Let me know if you’d like the LinkedIn URL updated.
-        </p>
       </section>
     </div>
   );
