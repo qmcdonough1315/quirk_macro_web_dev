@@ -222,12 +222,27 @@ function scaleFactor(values: number[]): number {
   return max > 0 && max < 1 ? 100 : 1;
 }
 
-function buildRun(date: string, rows: RawRow[]): FactorBetaRow {
+/** Keep only the newest row per (data_type, ticker) so repeated inserts don't duplicate. */
+function dedupe(rows: RawRow[]): RawRow[] {
+  const latest = new Map<string, RawRow>();
+  for (const r of rows) {
+    const key = `${normKey(r.data_type)}|${normKey(r.ticker_or_factor)}`;
+    const prev = latest.get(key);
+    if (!prev || (r.id ?? 0) >= (prev.id ?? 0)) latest.set(key, r);
+  }
+  return Array.from(latest.values());
+}
+
+function buildRun(date: string, allRows: RawRow[]): FactorBetaRow {
+  const rows = dedupe(allRows);
   const factorRows = rows.filter((r) => normKey(r.data_type) === "factorreturns");
   const weightRows = rows.filter((r) => normKey(r.data_type) === "portfolioweights");
+  const fundReturnRows = rows.filter((r) => normKey(r.data_type) === "fundexpectedreturn");
   const otherRows = rows.filter(
-    (r) => !["factorreturns", "portfolioweights"].includes(normKey(r.data_type)),
+    (r) =>
+      !["factorreturns", "portfolioweights", "fundexpectedreturn"].includes(normKey(r.data_type)),
   );
+
 
   const fScale = scaleFactor(
     factorRows.map((r) => toNumber(r.value)).filter((n): n is number => n !== null),
