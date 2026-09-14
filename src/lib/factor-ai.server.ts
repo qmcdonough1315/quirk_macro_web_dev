@@ -39,9 +39,12 @@ export async function generateRegimeSummary(input: RegimeInput): Promise<string>
     portfolio_weights_pct: Object.fromEntries(
       input.holdings.map((h) => [h.ticker, Number(h.weight.toFixed(2))]),
     ),
-    portfolio_expected_return_pct: input.expectedReturn,
-    portfolio_expected_vol_pct: input.expectedVol,
-    portfolio_sharpe: input.expectedSharpe,
+    portfolio_expected_return_pct:
+      input.expectedReturn === null ? null : Number(input.expectedReturn.toFixed(2)),
+    portfolio_expected_vol_pct:
+      input.expectedVol === null ? null : Number(input.expectedVol.toFixed(2)),
+    portfolio_sharpe:
+      input.expectedSharpe === null ? null : Number(input.expectedSharpe.toFixed(2)),
   });
 
   try {
