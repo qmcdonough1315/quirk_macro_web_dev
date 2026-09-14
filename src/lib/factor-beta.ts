@@ -78,6 +78,8 @@ const RETURN_KEYS = new Set([
   "portfolioexpectedreturn",
   "totalexpectedreturn",
   "expreturn",
+  "expectedreturn3m",
+  "expectedreturn3month",
   "return",
 ]);
 const VOL_KEYS = new Set([
