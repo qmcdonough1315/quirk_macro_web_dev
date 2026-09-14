@@ -94,7 +94,7 @@ export function AboutTab() {
             qrm3@georgetown.edu
           </a>
           <a
-            href="https://www.linkedin.com/in/quinnmcdonough"
+            href="https://linkedin.com/in/quinn-r-mcdonough-cpa"
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 rounded-lg bg-primary/12 px-4 py-2.5 font-display text-sm font-medium text-primary ring-1 ring-primary/30 transition-colors hover:bg-primary/20"
