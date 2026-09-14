@@ -206,6 +206,7 @@ export interface FactorBetaData {
 }
 
 interface RawRow {
+  id?: number;
   execution_date: string;
   data_type: string;
   ticker_or_factor: string;
@@ -338,7 +339,7 @@ export async function fetchFactorBetaData(): Promise<FactorBetaData> {
 
     const { data, error } = await supabase
       .from("factor_predictions")
-      .select("execution_date, data_type, ticker_or_factor, value")
+      .select("id, execution_date, data_type, ticker_or_factor, value")
       .gte("execution_date", cutoffISO)
       .order("execution_date", { ascending: false })
       .limit(5000);
