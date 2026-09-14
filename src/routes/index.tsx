@@ -7,6 +7,7 @@ import { HousingTab } from "@/components/dashboard/HousingTab";
 import { LocalTab } from "@/components/dashboard/LocalTab";
 import { FactorBetaTab } from "@/components/dashboard/FactorBetaTab";
 import { CashManagerTab } from "@/components/dashboard/CashManagerTab";
+import { AboutTab } from "@/components/dashboard/AboutTab";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -30,7 +31,7 @@ export const Route = createFileRoute("/")({
   component: Dashboard,
 });
 
-type SubTabId = "macros" | "housing" | "local" | "factors" | "cash";
+type SubTabId = "macros" | "housing" | "local" | "factors" | "cash" | "about";
 
 interface SubTab {
   id: SubTabId;
@@ -64,6 +65,7 @@ const nav: (NavGroup | SubTab)[] = [
       { id: "cash", label: "Cash Management" },
     ],
   },
+  { id: "about", label: "About" },
 ];
 
 const isGroup = (item: NavGroup | SubTab): item is NavGroup => "subtabs" in item;
@@ -88,7 +90,7 @@ function Dashboard() {
                 Quirk Macro Analytics
               </h1>
               <p className="mt-1.5 text-xs text-muted-foreground">
-                Housing &amp; rates intelligence terminal
+                Personal Financial Analytics Terminal
               </p>
             </div>
           </div>
@@ -179,8 +181,10 @@ function Dashboard() {
           <LocalTab />
         ) : tab === "factors" ? (
           <FactorBetaTab />
-        ) : (
+        ) : tab === "cash" ? (
           <CashManagerTab />
+        ) : (
+          <AboutTab />
         )}
       </main>
 
