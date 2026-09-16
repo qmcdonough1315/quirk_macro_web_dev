@@ -81,7 +81,7 @@ function LeaderboardRow({ fund, rank, isTop }: { fund: CashFund; rank: number; i
       <td className="py-3.5 pr-4">
         <span
           className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-medium ring-1 ${
-            CATEGORY_TINT[fund.category] ?? "bg-secondary text-muted-foreground ring-border"
+            categoryTint(fund.category)
           }`}
         >
           {fund.category}
