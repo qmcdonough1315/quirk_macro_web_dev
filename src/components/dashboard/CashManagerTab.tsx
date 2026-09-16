@@ -155,15 +155,15 @@ export function CashManagerTab() {
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <MetricCard
           icon={Trophy}
-          label="Highest 30-Day SEC Yield"
-          value={top ? pct(top.sec_yield_30d) : "—"}
-          note={top ? `${top.ticker} · ${top.fund_name}` : "Awaiting data"}
+          label="Average 30-Day SEC Yield"
+          value={avgYield !== null ? pct(avgYield) : "—"}
+          note={top ? `Across ${funds.length} funds · top: ${top.ticker}` : "Awaiting data"}
           loading={loading}
         />
         <MetricCard
           icon={PiggyBank}
           label="Avg. Expense Ratio"
-          value={funds.length ? pct(avgExpense) : "—"}
+          value={avgExpense !== null ? pct(avgExpense) : "—"}
           note={`Across ${funds.length} tracked funds`}
           loading={loading}
         />
@@ -171,14 +171,8 @@ export function CashManagerTab() {
           icon={Landmark}
           label="Benchmark · 3-Month T-Bill"
           value={tbill3m !== undefined ? pct(tbill3m) : "—"}
-          note={
-            rates.data?.curveDate
-              ? `Live from FRED · as of ${rates.data.curveDate}`
-              : rates.isPending
-                ? "Loading FRED benchmark"
-                : "FRED benchmark unavailable"
-          }
-          loading={rates.isPending}
+          note={benchmarkNote}
+          loading={tbill3m === undefined && rates.isPending}
         />
       </div>
 
