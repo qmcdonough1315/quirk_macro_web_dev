@@ -13,8 +13,9 @@ instead read:
 Behavior:
 
 - Leaderboard rows come from the fund table, ranked by 30-day SEC yield (highest first).
-- The three tiles on top read from the summary table: highest/average yield, average
-  expense ratio, and the benchmark 3-month T-bill. If the summary row has no T-bill value,
+- The three tiles on top read from the summary table: average yield, average
+  expense ratio, and the benchmark 3-month T-bill. The first tile becomes
+  "Average 30-Day SEC Yield" (no more "highest"). If the summary row has no T-bill value,
   the tile keeps using the live FRED benchmark it shows today.
 - The "as of" label uses the newest snapshot date found; the tab shows a "Live" label when
   real rows are present and keeps the existing placeholder data (clearly labeled) while
