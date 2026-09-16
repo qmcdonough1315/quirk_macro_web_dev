@@ -3,7 +3,6 @@ import { useServerFn } from "@tanstack/react-start";
 import {
   ArrowUpRight,
   Crown,
-  HardHat,
   Landmark,
   PiggyBank,
   Trophy,

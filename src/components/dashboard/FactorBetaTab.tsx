@@ -6,7 +6,6 @@ import {
   ArrowUpRight,
   Brain,
   ChevronDown,
-  FlaskConical,
   History,
   PieChart,
   Sigma,
