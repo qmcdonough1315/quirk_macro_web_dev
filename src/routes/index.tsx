@@ -121,28 +121,49 @@ function Dashboard() {
         </div>
 
         <div className="mx-auto max-w-7xl px-6">
-          <nav className="flex flex-wrap gap-1" aria-label="Dashboard sections">
+          <nav
+            ref={navRef}
+            className="flex gap-1 overflow-x-auto"
+            aria-label="Dashboard sections"
+          >
             {nav.map((item) =>
               isGroup(item) ? (
-                <div key={item.id} className="group relative">
+                <div
+                  key={item.id}
+                  className="group relative"
+                  onMouseEnter={() => setOpenGroup(item.id)}
+                  onMouseLeave={() => setOpenGroup(null)}
+                >
                   <button
                     type="button"
                     aria-haspopup="true"
-                    className={`-mb-px flex items-center gap-1.5 border-b-2 px-4 py-3 font-display text-sm font-medium tracking-tight transition-colors ${
+                    aria-expanded={openGroup === item.id}
+                    onClick={() => setOpenGroup(openGroup === item.id ? null : item.id)}
+                    className={`-mb-px flex items-center gap-1.5 whitespace-nowrap border-b-2 px-4 py-3 font-display text-sm font-medium tracking-tight transition-colors ${
                       activeGroup?.id === item.id
                         ? "border-accent text-foreground"
                         : "border-transparent text-muted-foreground hover:text-foreground"
                     }`}
                   >
                     {item.label}
-                    <ChevronDown className="size-3.5 opacity-60 transition-transform group-hover:rotate-180" />
+                    <ChevronDown
+                      className={`size-3.5 opacity-60 transition-transform ${
+                        openGroup === item.id ? "rotate-180" : ""
+                      }`}
+                    />
                   </button>
-                  <div className="invisible absolute left-0 top-full z-30 min-w-[220px] translate-y-1 rounded-lg border border-border bg-background p-1.5 opacity-0 shadow-lg transition-all group-hover:visible group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:visible group-focus-within:translate-y-0 group-focus-within:opacity-100">
+                  <div
+                    className={`absolute left-0 top-full z-30 min-w-[220px] rounded-lg border border-border bg-background p-1.5 shadow-lg transition-all ${
+                      openGroup === item.id
+                        ? "visible translate-y-0 opacity-100"
+                        : "invisible translate-y-1 opacity-0"
+                    }`}
+                  >
                     {item.subtabs.map((s) => (
                       <button
                         key={s.id}
                         type="button"
-                        onClick={() => setTab(s.id)}
+                        onClick={() => selectTab(s.id)}
                         className={`flex w-full items-center rounded-md px-3 py-2.5 text-left font-display text-sm font-medium tracking-tight transition-colors ${
                           tab === s.id
                             ? "bg-accent/12 text-accent"
@@ -159,8 +180,8 @@ function Dashboard() {
                   key={item.id}
                   type="button"
                   aria-selected={tab === item.id}
-                  onClick={() => setTab(item.id)}
-                  className={`-mb-px border-b-2 px-4 py-3 font-display text-sm font-medium tracking-tight transition-colors ${
+                  onClick={() => selectTab(item.id)}
+                  className={`-mb-px whitespace-nowrap border-b-2 px-4 py-3 font-display text-sm font-medium tracking-tight transition-colors ${
                     tab === item.id
                       ? "border-accent text-foreground"
                       : "border-transparent text-muted-foreground hover:text-foreground"
