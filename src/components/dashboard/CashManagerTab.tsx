@@ -125,10 +125,22 @@ export function CashManagerTab() {
 
   const funds = yields.data?.funds ?? [];
   const top = funds[0];
-  const avgExpense = funds.length
-    ? funds.reduce((s, f) => s + f.expense_ratio, 0) / funds.length
-    : 0;
-  const tbill3m = rates.data?.curve.find((c) => c.tenor === "3M")?.current;
+  const summary = yields.data?.summary ?? null;
+  const avgYield =
+    summary?.avg_yield ??
+    (funds.length ? funds.reduce((s, f) => s + f.sec_yield_30d, 0) / funds.length : null);
+  const avgExpense =
+    summary?.avg_expense_ratio ??
+    (funds.length ? funds.reduce((s, f) => s + f.expense_ratio, 0) / funds.length : null);
+  const fredTbill = rates.data?.curve.find((c) => c.tenor === "3M")?.current;
+  const tbill3m = summary?.benchmark_3m_tbill ?? fredTbill;
+  const benchmarkNote = summary?.benchmark_3m_tbill
+    ? `Engine summary · as of ${yields.data?.asOf ?? "latest"}`
+    : rates.data?.curveDate
+      ? `Live from FRED · as of ${rates.data.curveDate}`
+      : rates.isPending
+        ? "Loading FRED benchmark"
+        : "FRED benchmark unavailable";
   const loading = yields.isPending;
 
   return (
