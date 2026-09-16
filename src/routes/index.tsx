@@ -196,13 +196,13 @@ function Dashboard() {
 
         {activeGroup ? (
           <div className="border-t border-border/50 bg-secondary/30">
-            <div className="mx-auto flex max-w-7xl flex-wrap gap-1 px-6 py-1.5">
+            <div className="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-6 py-1.5">
               {activeGroup.subtabs.map((s) => (
                 <button
                   key={s.id}
                   type="button"
                   aria-selected={tab === s.id}
-                  onClick={() => setTab(s.id)}
+                  onClick={() => selectTab(s.id)}
                   className={`rounded-md px-3.5 py-1.5 font-display text-xs font-medium tracking-tight transition-colors ${
                     tab === s.id
                       ? "bg-accent/12 text-accent ring-1 ring-accent/30"
