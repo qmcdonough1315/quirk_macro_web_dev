@@ -14,11 +14,14 @@ import { getRatesOutlook } from "@/lib/market.functions";
 
 const pct = (n: number, digits = 2) => `${n.toFixed(digits)}%`;
 
-const CATEGORY_TINT: Record<string, string> = {
-  "Short Treasury": "bg-accent/12 text-accent ring-accent/30",
-  "Government Money Market": "bg-positive/10 text-positive ring-positive/30",
-  "Prime Money Market": "bg-warning/10 text-warning ring-warning/30",
-  "Floating Rate Treasury": "bg-secondary text-foreground ring-border",
+/** Tints the category pill by keyword so new category labels from the script still color correctly. */
+const categoryTint = (category: string) => {
+  const c = category.toLowerCase();
+  if (c.includes("prime")) return "bg-warning/10 text-warning ring-warning/30";
+  if (c.includes("government")) return "bg-positive/10 text-positive ring-positive/30";
+  if (c.includes("treasury")) return "bg-accent/12 text-accent ring-accent/30";
+  if (c.includes("bond")) return "bg-secondary text-foreground ring-border";
+  return "bg-secondary text-muted-foreground ring-border";
 };
 
 function MetricCard({
@@ -221,8 +224,8 @@ export function CashManagerTab() {
             <Wallet className="mx-auto size-6 text-muted-foreground" />
             <p className="mt-3 text-sm font-medium text-foreground">No yield data yet</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              The cash_manager_yields table is empty — rows populate weekly via the external
-              Python script.
+              The cash_yield_matrix table is empty — rows populate weekly via the external Python
+              script.
             </p>
           </div>
         )}
