@@ -8,9 +8,8 @@ import { supabase } from "./supabase";
  *   cash_engine_summary  average yield across the top 10, average expense ratio,
  *                        benchmark 3-month T-bill
  *
- * Column names are matched defensively (normalized key lookup) and fraction
- * values (<1) are scaled to percent, so script-side naming drift does not
- * break the tab.
+ * Column names are matched defensively (normalized key lookup) and both tables
+ * store whole percentages (4.45 means 4.45%), so values are read as-is.
  */
 export interface CashFund {
   id: string;
@@ -149,15 +148,26 @@ const toNum = (v: unknown): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
-/** Yields/expense ratios stored as fractions (0.052) become percent (5.2). */
-const toPct = (v: unknown): number | null => {
-  const n = toNum(v);
-  if (n === null) return null;
-  return Math.abs(n) < 1 ? n * 100 : n;
-};
+/**
+ * The tables store whole percentages (a 0.08 expense ratio means 0.08%), so no
+ * fraction scaling is applied — guessing at units would misread small values.
+ */
+const toPct = (v: unknown): number | null => toNum(v);
 
-const DATE_KEYS = ["as_of_date", "asof", "asofdate", "snapshot_date", "date", "run_date"];
-const getDate = (row: Record<string, unknown>) => String(lookup(row, DATE_KEYS) ?? "");
+const DATE_KEYS = [
+  "as_of_date",
+  "asof",
+  "asofdate",
+  "snapshot_date",
+  "date",
+  "run_date",
+  "updated_at",
+  "created_at",
+];
+
+/** Newest snapshot stamp as YYYY-MM-DD; ISO timestamps are truncated to the date. */
+const getDate = (row: Record<string, unknown>) =>
+  String(lookup(row, DATE_KEYS) ?? "").slice(0, 10);
 
 function coerceFund(row: Record<string, unknown>): CashFund {
   const ticker = String(lookup(row, ["ticker", "symbol", "fund_ticker"]) ?? "").toUpperCase();
@@ -168,9 +178,18 @@ function coerceFund(row: Record<string, unknown>): CashFund {
     fund_name: String(lookup(row, ["fund_name", "fundname", "name"]) ?? ticker),
     category: String(lookup(row, ["category", "fund_category", "type"]) ?? "—"),
     sec_yield_30d:
-      toPct(lookup(row, ["sec_yield_30d", "yield_30d_sec", "secyield30d", "sec_yield", "yield"])) ??
-      0,
-    expense_ratio: toPct(lookup(row, ["expense_ratio", "expenseratio", "net_expense_ratio"])) ?? 0,
+      toPct(
+        lookup(row, [
+          "sec_yield",
+          "sec_yield_30d",
+          "yield_30d_sec",
+          "secyield30d",
+          "yield_30d",
+          "yield",
+        ]),
+      ) ?? 0,
+    expense_ratio:
+      toPct(lookup(row, ["expense_ratio", "expenseratio", "net_expense_ratio", "expense"])) ?? 0,
     distribution_frequency: String(
       lookup(row, ["distribution_frequency", "distribution_schedule", "distributions"]) ?? "—",
     ),
@@ -181,20 +200,32 @@ function coerceFund(row: Record<string, unknown>): CashFund {
 function coerceSummary(row: Record<string, unknown>): CashSummary {
   return {
     avg_yield: toPct(
-      lookup(row, ["avg_yield", "average_yield", "avgyield", "avg_sec_yield", "average_sec_yield"]),
+      lookup(row, [
+        "avg_yield",
+        "average_yield",
+        "avgyield",
+        "avg_sec_yield",
+        "average_sec_yield",
+      ]),
     ),
     avg_expense_ratio: toPct(
-      lookup(row, ["avg_expense_ratio", "average_expense_ratio", "avgexpenseratio"]),
+      lookup(row, [
+        "avg_expense",
+        "avg_expense_ratio",
+        "average_expense_ratio",
+        "avgexpense",
+        "avgexpenseratio",
+      ]),
     ),
     benchmark_3m_tbill: toPct(
       lookup(row, [
+        "fred_3m_tbill",
+        "fred_3m_tbill_yield",
         "benchmark_3m_tbill",
-        "benchmark3mtbill",
         "tbill_3m",
         "tbill3m",
-        "benchmark",
-        "t_bill_3m",
         "3m_tbill",
+        "benchmark",
       ]),
     ),
   };
