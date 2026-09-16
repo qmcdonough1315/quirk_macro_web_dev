@@ -145,13 +145,6 @@ export function CashManagerTab() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3 rounded-lg border border-warning/40 bg-warning/10 px-5 py-3.5">
-        <HardHat className="size-4 shrink-0 text-warning" />
-        <p className="font-display text-sm font-semibold tracking-tight text-foreground">
-          Currently under construction, check back soon
-        </p>
-      </div>
-
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <MetricCard
           icon={Trophy}

@@ -210,13 +210,6 @@ export function FactorBetaTab() {
 
   return (
     <div className="relative space-y-6 pb-16">
-      <div className="flex items-center gap-3 rounded-lg border border-warning/40 bg-warning/10 px-5 py-3.5">
-        <FlaskConical className="size-4 shrink-0 text-warning" />
-        <p className="font-display text-sm font-semibold tracking-tight text-foreground">
-          Model is undergoing testing
-        </p>
-      </div>
-
       <section className="panel p-6">
         <div className="mb-4 flex items-center gap-2.5">
           <Brain className="size-4 text-accent" />
