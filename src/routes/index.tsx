@@ -203,7 +203,7 @@ function Dashboard() {
                   type="button"
                   aria-selected={tab === s.id}
                   onClick={() => selectTab(s.id)}
-                  className={`rounded-md px-3.5 py-1.5 font-display text-xs font-medium tracking-tight transition-colors ${
+                  className={`whitespace-nowrap rounded-md px-3.5 py-2.5 font-display text-xs font-medium tracking-tight transition-colors ${
                     tab === s.id
                       ? "bg-accent/12 text-accent ring-1 ring-accent/30"
                       : "text-muted-foreground hover:bg-secondary/70 hover:text-foreground"
