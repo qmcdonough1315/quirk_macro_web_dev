@@ -123,7 +123,7 @@ function Dashboard() {
         <div className="mx-auto max-w-7xl px-6">
           <nav
             ref={navRef}
-            className="flex gap-1 overflow-x-auto"
+            className="flex flex-wrap gap-1 overflow-visible"
             aria-label="Dashboard sections"
           >
             {nav.map((item) =>
