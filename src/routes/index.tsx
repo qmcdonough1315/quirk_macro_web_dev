@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Activity, ChevronDown, Home, Wallet } from "lucide-react";
 
 import { MacroTab } from "@/components/dashboard/MacroTab";
@@ -72,10 +72,34 @@ const isGroup = (item: NavGroup | SubTab): item is NavGroup => "subtabs" in item
 
 function Dashboard() {
   const [tab, setTab] = useState<SubTabId>("macros");
+  const [openGroup, setOpenGroup] = useState<string | null>(null);
+  const navRef = useRef<HTMLElement>(null);
 
   const activeGroup = nav.find(
     (item): item is NavGroup => isGroup(item) && item.subtabs.some((s) => s.id === tab),
   );
+
+  // Close open menus on outside tap or Escape (needed for touch devices).
+  useEffect(() => {
+    if (!openGroup) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (navRef.current && !navRef.current.contains(e.target as Node)) setOpenGroup(null);
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpenGroup(null);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [openGroup]);
+
+  const selectTab = (id: SubTabId) => {
+    setTab(id);
+    setOpenGroup(null);
+  };
 
   return (
     <div className="min-h-screen grid-backdrop">
@@ -97,28 +121,49 @@ function Dashboard() {
         </div>
 
         <div className="mx-auto max-w-7xl px-6">
-          <nav className="flex flex-wrap gap-1" aria-label="Dashboard sections">
+          <nav
+            ref={navRef}
+            className="flex flex-wrap gap-1 overflow-visible"
+            aria-label="Dashboard sections"
+          >
             {nav.map((item) =>
               isGroup(item) ? (
-                <div key={item.id} className="group relative">
+                <div
+                  key={item.id}
+                  className="group relative"
+                  onMouseEnter={() => setOpenGroup(item.id)}
+                  onMouseLeave={() => setOpenGroup(null)}
+                >
                   <button
                     type="button"
                     aria-haspopup="true"
-                    className={`-mb-px flex items-center gap-1.5 border-b-2 px-4 py-3 font-display text-sm font-medium tracking-tight transition-colors ${
+                    aria-expanded={openGroup === item.id}
+                    onClick={() => setOpenGroup(openGroup === item.id ? null : item.id)}
+                    className={`-mb-px flex items-center gap-1.5 whitespace-nowrap border-b-2 px-4 py-3 font-display text-sm font-medium tracking-tight transition-colors ${
                       activeGroup?.id === item.id
                         ? "border-accent text-foreground"
                         : "border-transparent text-muted-foreground hover:text-foreground"
                     }`}
                   >
                     {item.label}
-                    <ChevronDown className="size-3.5 opacity-60 transition-transform group-hover:rotate-180" />
+                    <ChevronDown
+                      className={`size-3.5 opacity-60 transition-transform ${
+                        openGroup === item.id ? "rotate-180" : ""
+                      }`}
+                    />
                   </button>
-                  <div className="invisible absolute left-0 top-full z-30 min-w-[220px] translate-y-1 rounded-lg border border-border bg-background p-1.5 opacity-0 shadow-lg transition-all group-hover:visible group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:visible group-focus-within:translate-y-0 group-focus-within:opacity-100">
+                  <div
+                    className={`absolute left-0 top-full z-30 min-w-[220px] rounded-lg border border-border bg-background p-1.5 shadow-lg transition-all ${
+                      openGroup === item.id
+                        ? "visible translate-y-0 opacity-100"
+                        : "invisible translate-y-1 opacity-0"
+                    }`}
+                  >
                     {item.subtabs.map((s) => (
                       <button
                         key={s.id}
                         type="button"
-                        onClick={() => setTab(s.id)}
+                        onClick={() => selectTab(s.id)}
                         className={`flex w-full items-center rounded-md px-3 py-2.5 text-left font-display text-sm font-medium tracking-tight transition-colors ${
                           tab === s.id
                             ? "bg-accent/12 text-accent"
@@ -135,8 +180,8 @@ function Dashboard() {
                   key={item.id}
                   type="button"
                   aria-selected={tab === item.id}
-                  onClick={() => setTab(item.id)}
-                  className={`-mb-px border-b-2 px-4 py-3 font-display text-sm font-medium tracking-tight transition-colors ${
+                  onClick={() => selectTab(item.id)}
+                  className={`-mb-px whitespace-nowrap border-b-2 px-4 py-3 font-display text-sm font-medium tracking-tight transition-colors ${
                     tab === item.id
                       ? "border-accent text-foreground"
                       : "border-transparent text-muted-foreground hover:text-foreground"
@@ -151,14 +196,14 @@ function Dashboard() {
 
         {activeGroup ? (
           <div className="border-t border-border/50 bg-secondary/30">
-            <div className="mx-auto flex max-w-7xl flex-wrap gap-1 px-6 py-1.5">
+            <div className="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-6 py-1.5">
               {activeGroup.subtabs.map((s) => (
                 <button
                   key={s.id}
                   type="button"
                   aria-selected={tab === s.id}
-                  onClick={() => setTab(s.id)}
-                  className={`rounded-md px-3.5 py-1.5 font-display text-xs font-medium tracking-tight transition-colors ${
+                  onClick={() => selectTab(s.id)}
+                  className={`whitespace-nowrap rounded-md px-3.5 py-2.5 font-display text-xs font-medium tracking-tight transition-colors ${
                     tab === s.id
                       ? "bg-accent/12 text-accent ring-1 ring-accent/30"
                       : "text-muted-foreground hover:bg-secondary/70 hover:text-foreground"
