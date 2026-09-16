@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Activity, ChevronDown, Home, Wallet } from "lucide-react";
 
 import { MacroTab } from "@/components/dashboard/MacroTab";
@@ -72,10 +72,34 @@ const isGroup = (item: NavGroup | SubTab): item is NavGroup => "subtabs" in item
 
 function Dashboard() {
   const [tab, setTab] = useState<SubTabId>("macros");
+  const [openGroup, setOpenGroup] = useState<string | null>(null);
+  const navRef = useRef<HTMLElement>(null);
 
   const activeGroup = nav.find(
     (item): item is NavGroup => isGroup(item) && item.subtabs.some((s) => s.id === tab),
   );
+
+  // Close open menus on outside tap or Escape (needed for touch devices).
+  useEffect(() => {
+    if (!openGroup) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (navRef.current && !navRef.current.contains(e.target as Node)) setOpenGroup(null);
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpenGroup(null);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [openGroup]);
+
+  const selectTab = (id: SubTabId) => {
+    setTab(id);
+    setOpenGroup(null);
+  };
 
   return (
     <div className="min-h-screen grid-backdrop">
