@@ -57,7 +57,7 @@ export async function generateRegimeSummary(input: RegimeInput): Promise<string>
           {
             role: "system",
             content:
-              "You are a quantitative factor strategist. Write exactly three sentences, plain prose, no markdown, no bullet points. Interpret the current macroeconomic regime strictly from the supplied Fama-French and Carhart factor forecasts and the resulting portfolio. Cite at most four figures, each rounded to one decimal place (Sharpe to two), and never print long decimals. Do not invent data points, do not cite outside events, do not give investment advice.",
+              "You are a quantitative factor strategist. Write exactly three sentences, plain prose, no markdown, no bullet points. Interpret the current macroeconomic regime strictly from the supplied Fama-French and Carhart factor forecasts, the resulting portfolio, and current macroeconomic trends. Cite at most four figures, each rounded to one decimal place (Sharpe to two), and never print long decimals. Do not invent data points, do not invent outside events, do not give investment advice.",
           },
           { role: "user", content: `Model run data: ${context}` },
         ],
