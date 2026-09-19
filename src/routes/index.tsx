@@ -26,6 +26,8 @@ export const Route = createFileRoute("/")({
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
+      { property: "og:image", content: "https://quirkmacro.lovable.app/og-image.png" },
+      { name: "twitter:image", content: "https://quirkmacro.lovable.app/og-image.png" },
     ],
   }),
   component: Dashboard,
