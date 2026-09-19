@@ -1,4 +1,30 @@
-import { CheckCircle2, Database, Lightbulb, Linkedin, Mail, PiggyBank, ShieldCheck } from "lucide-react";
+import { Lightbulb, Linkedin, Mail, Rocket, ShieldCheck } from "lucide-react";
+
+const WHY_POINTS = [
+  {
+    title: "Tired of Context Switching",
+    body: "Built to eliminate the friction of toggling across multiple fragmented news and financial portals for daily macro and housing updates.",
+  },
+  {
+    title: "Practical Quantitative Modeling",
+    body: "Created to directly apply Fama-French/Carhart factor models and mathematical asset pricing theories to real-world ETF allocations.",
+  },
+  {
+    title: "Unbiased Cash Optimization",
+    body: "Designed to provide transparent, un-sponsored 30-day SEC yield rankings for idle cash, avoiding for-profit affiliate pages that push high-commission funds.",
+  },
+  {
+    title: "Data Integrity You Can Trust",
+    body: "Built on open-source automated data pipelines sourcing directly from official institutions (FRED, U.S. Census Bureau, Federal Reserve).",
+  },
+];
+
+const PIPELINE = [
+  "Exploring further data sources to integrate into the terminal.",
+  "Building more customized dashboards that personalize the dashboard view based on individual preferences.",
+  "Adding a profile feature so personal preferences can be saved.",
+  "Updating and refining the Housing Market Explorer to improve geographical awareness.",
+];
 
 export function AboutTab() {
   return (
@@ -14,50 +40,15 @@ export function AboutTab() {
             </h2>
           </div>
           <ul className="space-y-4">
-            <li className="flex gap-3">
-              <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-primary" />
-              <div>
-                <p className="font-display text-sm font-semibold">Tired of Context Switching</p>
-                <p className="text-sm text-muted-foreground">
-                  Built to eliminate the friction of toggling across multiple fragmented news and
-                  financial portals for daily macro and housing updates.
-                </p>
-              </div>
-            </li>
-            <li className="flex gap-3">
-              <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-primary" />
-              <div>
-                <p className="font-display text-sm font-semibold">
-                  Practical Quantitative Modeling
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  Created to directly apply Fama-French/Carhart factor models and mathematical asset
-                  pricing theories to real-world ETF allocations.
-                </p>
-              </div>
-            </li>
-            <li className="flex gap-3">
-              <PiggyBank className="mt-0.5 size-5 shrink-0 text-primary" />
-              <div>
-                <p className="font-display text-sm font-semibold">Unbiased Cash Optimization</p>
-                <p className="text-sm text-muted-foreground">
-                  Designed to provide transparent, un-sponsored 30-day SEC yield rankings for idle
-                  cash, avoiding for-profit affiliate pages that push high-commission funds.
-                </p>
-              </div>
-            </li>
-            <li className="flex gap-3">
-              <Database className="mt-0.5 size-5 shrink-0 text-primary" />
-              <div>
-                <p className="font-display text-sm font-semibold">Data Integrity You Can Trust</p>
-                <p className="text-sm text-muted-foreground">
-                  Built on open-source automated data pipelines sourcing directly from official
-                  institutions (FRED, U.S. Census Bureau, Federal Reserve).
-                </p>
-              </div>
-            </li>
+            {WHY_POINTS.map((point) => (
+              <li key={point.title}>
+                <p className="font-display text-sm font-semibold">{point.title}</p>
+                <p className="text-sm text-muted-foreground">{point.body}</p>
+              </li>
+            ))}
           </ul>
         </div>
+
 
         <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
           <div className="mb-5 flex items-center gap-3">
