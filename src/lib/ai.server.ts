@@ -1,10 +1,10 @@
-/** Server-only: shared Lovable AI Gateway text helper (Gemini) + in-memory response cache. */
+/** Server-only: direct Google Gemini text helper + in-memory response cache. */
 
 import { AI_UNAVAILABLE_MESSAGE } from "./ai-messages";
 
 export const AI_UNAVAILABLE = AI_UNAVAILABLE_MESSAGE;
 
-export const AI_TEXT_MODEL = "google/gemini-3.6-flash";
+export const AI_TEXT_MODEL = "gemini-3.6-flash";
 
 export interface AiMessage {
   role: "system" | "user" | "assistant";
@@ -38,28 +38,52 @@ function writeCache(key: string, value: string, ttlMs: number) {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-async function callGateway(apiKey: string, messages: AiMessage[]): Promise<string | null> {
-  const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+async function callGemini(apiKey: string, messages: AiMessage[]): Promise<string | null> {
+  const systemInstruction = messages
+    .filter((message) => message.role === "system")
+    .map((message) => message.content)
+    .join("\n\n");
+  const contents = messages
+    .filter((message) => message.role !== "system")
+    .map((message) => ({
+      role: message.role === "assistant" ? "model" : "user",
+      parts: [{ text: message.content }],
+    }));
+
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${AI_TEXT_MODEL}:generateContent`,
+    {
     method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model: AI_TEXT_MODEL, messages }),
-  });
+      headers: { "x-goog-api-key": apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...(systemInstruction
+          ? { systemInstruction: { parts: [{ text: systemInstruction }] } }
+          : {}),
+        contents,
+      }),
+    },
+  );
 
   if (!res.ok) {
     const retryable = res.status === 429 || res.status >= 500;
     const body = await res.text().catch(() => "");
-    console.error(`AI gateway error [${res.status}]: ${body.slice(0, 500)}`);
+    console.error(`Gemini API error [${res.status}]: ${body.slice(0, 500)}`);
     if (retryable) throw new Error(`retryable:${res.status}`);
     return null;
   }
 
-  const json = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-  const text = (json.choices?.[0]?.message?.content ?? "").trim();
+  const json = (await res.json()) as {
+    candidates?: { content?: { parts?: { text?: string }[] } }[];
+  };
+  const text = (json.candidates?.[0]?.content?.parts ?? [])
+    .map((part) => part.text ?? "")
+    .join("")
+    .trim();
   return text || null;
 }
 
 /**
- * Runs a Gemini text completion through the Lovable AI Gateway.
+ * Runs a text completion directly through the Google Gemini API.
  * Returns `null` when the model is unavailable — callers surface AI_UNAVAILABLE.
  * Successful results are cached in memory when `cacheKey` is supplied.
  */
@@ -73,21 +97,21 @@ export async function generateAiText(
     if (cached) return cached;
   }
 
-  const apiKey = process.env["LOVABLE_API_KEY"];
+  const apiKey = process.env["GEMINI_API_KEY"];
   if (!apiKey) {
-    console.error("LOVABLE_API_KEY is not configured");
+    console.error("GEMINI_API_KEY is not configured");
     return null;
   }
 
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const text = await callGateway(apiKey, messages);
+      const text = await callGemini(apiKey, messages);
       if (text && cacheKey) writeCache(cacheKey, text, ttlMs);
       return text;
     } catch (error) {
       const retryable = error instanceof Error && error.message.startsWith("retryable:");
       if (!retryable || attempt === 1) {
-        if (!retryable) console.error("AI gateway request failed", error);
+        if (!retryable) console.error("Gemini API request failed", error);
         return null;
       }
       await sleep(800);
