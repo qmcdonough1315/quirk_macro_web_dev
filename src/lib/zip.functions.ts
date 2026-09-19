@@ -25,5 +25,10 @@ const vibeInputSchema = z
 export const getDriveByVibe = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => vibeInputSchema.parse(input))
   .handler(async ({ data }) => {
-    return await generateDriveByVibe(data);
+    return await generateDriveByVibe({
+      zip: data.zip,
+      city: data.city ?? null,
+      state: data.state ?? null,
+      metrics: data.metrics,
+    });
   });
