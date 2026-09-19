@@ -10,6 +10,8 @@ import {
   Percent,
   Sparkles,
 } from "lucide-react";
+
+import { AI_UNAVAILABLE_MESSAGE } from "@/lib/ai-messages";
 import {
   CartesianGrid,
   Line,
