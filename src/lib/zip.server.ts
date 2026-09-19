@@ -42,6 +42,9 @@ function unavailable(retryable: boolean): VibeResult {
 export async function generateDriveByVibe(input: VibeInput): Promise<VibeResult> {
   const refreshWindow = getEasternRefreshWindow();
   const metrics = JSON.stringify(input.metrics);
+  if (metrics.length > 4000) {
+    return unavailable(false);
+  }
 
   const result = await generateAiTextResult(
     [
