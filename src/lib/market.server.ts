@@ -1,5 +1,6 @@
 /** Server-only helpers for FRED, RealtyAPI and the AI area-profile summary. */
 
+import { AI_UNAVAILABLE, generateAiText, hashKey, parseJsonBlock } from "./ai.server";
 import { fetchRealtyMarket } from "./realty.server";
 
 
