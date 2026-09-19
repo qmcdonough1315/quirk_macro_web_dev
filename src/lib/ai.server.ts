@@ -16,6 +16,11 @@ interface CacheEntry {
   expires: number;
 }
 
+export interface AiTextResult {
+  text: string | null;
+  retryable: boolean;
+}
+
 const cache = new Map<string, CacheEntry>();
 
 function readCache(key: string): string | null {
@@ -38,7 +43,7 @@ function writeCache(key: string, value: string, ttlMs: number) {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-async function callGemini(apiKey: string, messages: AiMessage[]): Promise<string | null> {
+async function callGemini(apiKey: string, messages: AiMessage[]): Promise<AiTextResult> {
   const systemInstruction = messages
     .filter((message) => message.role === "system")
     .map((message) => message.content)
@@ -69,7 +74,7 @@ async function callGemini(apiKey: string, messages: AiMessage[]): Promise<string
     const body = await res.text().catch(() => "");
     console.error(`Gemini API error [${res.status}]: ${body.slice(0, 500)}`);
     if (retryable) throw new Error(`retryable:${res.status}`);
-    return null;
+    return { text: null, retryable: false };
   }
 
   const json = (await res.json()) as {
@@ -79,7 +84,7 @@ async function callGemini(apiKey: string, messages: AiMessage[]): Promise<string
     .map((part) => part.text ?? "")
     .join("")
     .trim();
-  return text || null;
+  return { text: text || null, retryable: !text };
 }
 
 /**
@@ -91,33 +96,41 @@ export async function generateAiText(
   messages: AiMessage[],
   options: { cacheKey?: string; ttlMs?: number } = {},
 ): Promise<string | null> {
+  return (await generateAiTextResult(messages, options)).text;
+}
+
+/** Also reports whether a failed request is safe to try once more. */
+export async function generateAiTextResult(
+  messages: AiMessage[],
+  options: { cacheKey?: string; ttlMs?: number } = {},
+): Promise<AiTextResult> {
   const { cacheKey, ttlMs = 6 * 60 * 60_000 } = options;
   if (cacheKey) {
     const cached = readCache(cacheKey);
-    if (cached) return cached;
+    if (cached) return { text: cached, retryable: false };
   }
 
   const apiKey = process.env["GEMINI_API_KEY"];
   if (!apiKey) {
     console.error("GEMINI_API_KEY is not configured");
-    return null;
+    return { text: null, retryable: false };
   }
 
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const text = await callGemini(apiKey, messages);
-      if (text && cacheKey) writeCache(cacheKey, text, ttlMs);
-      return text;
+      const result = await callGemini(apiKey, messages);
+      if (result.text && cacheKey) writeCache(cacheKey, result.text, ttlMs);
+      return result;
     } catch (error) {
       const retryable = error instanceof Error && error.message.startsWith("retryable:");
       if (!retryable || attempt === 1) {
         if (!retryable) console.error("Gemini API request failed", error);
-        return null;
+        return { text: null, retryable };
       }
       await sleep(800);
     }
   }
-  return null;
+  return { text: null, retryable: true };
 }
 
 /** Extracts the first JSON object/array from a model response. */

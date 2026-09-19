@@ -11,7 +11,12 @@ import {
   Sparkles,
 } from "lucide-react";
 
-import { AI_UNAVAILABLE_MESSAGE } from "@/lib/ai-messages";
+import { useAiRefreshWindow } from "@/hooks/use-ai-refresh-window";
+import {
+  AI_UNAVAILABLE_MESSAGE,
+  requireAvailableCommentary,
+  shouldRetryCommentary,
+} from "@/lib/ai-messages";
 import {
   CartesianGrid,
   Line,
@@ -61,6 +66,7 @@ const fmtDay = (iso: string) =>
   });
 
 export function MacroTab() {
+  const commentaryWindow = useAiRefreshWindow();
   const fetchMacro = useServerFn(getMacroSnapshot);
   const { data, isPending, error } = useQuery({
     queryKey: ["macro-snapshot"],
@@ -79,7 +85,7 @@ export function MacroTab() {
 
   const fetchRecap = useServerFn(getMacroRecap);
   const recap = useQuery({
-    queryKey: ["macro-recap", data?.updated],
+    queryKey: ["macro-recap", commentaryWindow, data?.updated],
     queryFn: () =>
       fetchRecap({
         data: {
@@ -89,11 +95,12 @@ export function MacroTab() {
           corePceYoY: data!.corePce.latest,
           asOf: data!.updated,
         },
-      }),
+      }).then(requireAvailableCommentary),
     enabled: !!data,
-    staleTime: 6 * 60 * 60_000,
+    staleTime: Infinity,
     gcTime: 24 * 60 * 60_000,
-    retry: 1,
+    retry: (failureCount, queryError) => shouldRetryCommentary(failureCount, queryError),
+    retryDelay: 5_000,
   });
 
   const fetchCalendar = useServerFn(getEconCalendar);

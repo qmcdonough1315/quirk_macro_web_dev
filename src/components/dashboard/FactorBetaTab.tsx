@@ -17,6 +17,12 @@ import {
   type PortfolioHolding,
 } from "@/lib/factor-beta";
 import { getRegimeSummary } from "@/lib/factor-ai.functions";
+import { useAiRefreshWindow } from "@/hooks/use-ai-refresh-window";
+import {
+  AI_UNAVAILABLE_MESSAGE,
+  requireAvailableCommentary,
+  shouldRetryCommentary,
+} from "@/lib/ai-messages";
 
 const pct = (n: number | null | undefined, digits = 2) =>
   typeof n === "number" && Number.isFinite(n) ? `${n > 0 ? "+" : ""}${n.toFixed(digits)}%` : "—";
@@ -164,6 +170,7 @@ function PreviousRunCard({ run }: { run: FactorBetaRow }) {
 }
 
 export function FactorBetaTab() {
+  const commentaryWindow = useAiRefreshWindow();
   const { data, isPending } = useQuery({
     queryKey: ["factor-predictions"],
     queryFn: fetchFactorBetaData,
@@ -173,10 +180,10 @@ export function FactorBetaTab() {
   const current = data?.current;
 
   const regimeFn = useServerFn(getRegimeSummary);
-  const { data: regime, isPending: regimePending } = useQuery({
-    queryKey: ["factor-regime-summary", current?.as_of_date, data?.live],
+  const { data: regime, isPending: regimePending, error: regimeError } = useQuery({
+    queryKey: ["factor-regime-summary", commentaryWindow, current?.as_of_date, data?.live],
     enabled: Boolean(current && data?.live),
-    staleTime: 24 * 60 * 60_000,
+    staleTime: Infinity,
     gcTime: 24 * 60 * 60_000,
     queryFn: () =>
       regimeFn({
@@ -192,7 +199,9 @@ export function FactorBetaTab() {
           expectedVol: current!.expected_vol,
           expectedSharpe: current!.expected_sharpe,
         },
-      }),
+      }).then(requireAvailableCommentary),
+    retry: (failureCount, queryError) => shouldRetryCommentary(failureCount, queryError),
+    retryDelay: 5_000,
   });
 
   const summary = data?.live ? regime?.summary : current?.regime_summary;
@@ -224,7 +233,9 @@ export function FactorBetaTab() {
         {isPending || (data?.live && regimePending) ? (
           <div className="h-20 animate-pulse rounded-lg bg-secondary/40" />
         ) : (
-          <p className="max-w-4xl text-sm leading-relaxed text-muted-foreground">{summary}</p>
+          <p className="max-w-4xl text-sm leading-relaxed text-muted-foreground">
+            {regimeError ? AI_UNAVAILABLE_MESSAGE : summary}
+          </p>
         )}
       </section>
 

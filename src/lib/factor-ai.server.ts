@@ -1,4 +1,5 @@
-import { AI_UNAVAILABLE, generateAiText } from "./ai.server";
+import { COMMENTARY_CACHE_TTL_MS, getEasternRefreshWindow } from "./ai-refresh";
+import { AI_UNAVAILABLE, generateAiTextResult } from "./ai.server";
 
 export interface RegimeInput {
   asOfDate: string;
@@ -9,8 +10,15 @@ export interface RegimeInput {
   expectedSharpe: number | null;
 }
 
+export interface RegimeSummaryResult {
+  summary: string;
+  available: boolean;
+  retryable: boolean;
+}
+
 /** Three-sentence regime read generated from this run's own numbers. */
-export async function generateRegimeSummary(input: RegimeInput): Promise<string> {
+export async function generateRegimeSummary(input: RegimeInput): Promise<RegimeSummaryResult> {
+  const refreshWindow = getEasternRefreshWindow();
   const context = JSON.stringify({
     as_of_date: input.asOfDate,
     predicted_3m_factor_excess_returns_pct: Object.fromEntries(
@@ -27,7 +35,7 @@ export async function generateRegimeSummary(input: RegimeInput): Promise<string>
       input.expectedSharpe === null ? null : Number(input.expectedSharpe.toFixed(2)),
   });
 
-  const text = await generateAiText(
+  const result = await generateAiTextResult(
     [
       {
         role: "system",
@@ -36,8 +44,15 @@ export async function generateRegimeSummary(input: RegimeInput): Promise<string>
       },
       { role: "user", content: `Model run data: ${context}` },
     ],
-    { cacheKey: `regime:${input.asOfDate}`, ttlMs: 24 * 60 * 60_000 },
+    {
+      cacheKey: `regime:${refreshWindow}:${input.asOfDate}`,
+      ttlMs: COMMENTARY_CACHE_TTL_MS,
+    },
   );
 
-  return text ?? AI_UNAVAILABLE;
+  return {
+    summary: result.text ?? AI_UNAVAILABLE,
+    available: Boolean(result.text),
+    retryable: result.retryable,
+  };
 }
