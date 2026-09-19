@@ -19,6 +19,7 @@ import {
 import { getRegimeSummary } from "@/lib/factor-ai.functions";
 import { useAiRefreshWindow } from "@/hooks/use-ai-refresh-window";
 import { requireAvailableCommentary, shouldRetryCommentary } from "@/lib/ai-messages";
+import { AI_UNAVAILABLE_MESSAGE } from "@/lib/ai-messages";
 
 const pct = (n: number | null | undefined, digits = 2) =>
   typeof n === "number" && Number.isFinite(n) ? `${n > 0 ? "+" : ""}${n.toFixed(digits)}%` : "—";
@@ -176,7 +177,7 @@ export function FactorBetaTab() {
   const current = data?.current;
 
   const regimeFn = useServerFn(getRegimeSummary);
-  const { data: regime, isPending: regimePending } = useQuery({
+  const { data: regime, isPending: regimePending, error: regimeError } = useQuery({
     queryKey: ["factor-regime-summary", commentaryWindow, current?.as_of_date, data?.live],
     enabled: Boolean(current && data?.live),
     staleTime: Infinity,
@@ -229,7 +230,9 @@ export function FactorBetaTab() {
         {isPending || (data?.live && regimePending) ? (
           <div className="h-20 animate-pulse rounded-lg bg-secondary/40" />
         ) : (
-          <p className="max-w-4xl text-sm leading-relaxed text-muted-foreground">{summary}</p>
+          <p className="max-w-4xl text-sm leading-relaxed text-muted-foreground">
+            {regimeError ? AI_UNAVAILABLE_MESSAGE : summary}
+          </p>
         )}
       </section>
 

@@ -18,11 +18,11 @@ export function getEasternRefreshWindow(now = new Date()): string {
   const values = Object.fromEntries(
     easternParts.formatToParts(now).map((part) => [part.type, part.value]),
   );
-  const year = Number(values.year);
-  const month = Number(values.month);
-  const day = Number(values.day);
-  const hour = Number(values.hour);
-  const currentDate = `${values.year}-${values.month}-${values.day}`;
+  const year = Number(values["year"]);
+  const month = Number(values["month"]);
+  const day = Number(values["day"]);
+  const hour = Number(values["hour"]);
+  const currentDate = `${values["year"]}-${values["month"]}-${values["day"]}`;
 
   if (hour < 6) return `${previousDate(year, month, day)}-18`;
   if (hour < 12) return `${currentDate}-06`;
