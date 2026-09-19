@@ -1,6 +1,8 @@
 /** Server-only: shared Lovable AI Gateway text helper (Gemini) + in-memory response cache. */
 
-export const AI_UNAVAILABLE = "commentary unavailable at the moment, check back soon!";
+import { AI_UNAVAILABLE_MESSAGE } from "./ai-messages";
+
+export const AI_UNAVAILABLE = AI_UNAVAILABLE_MESSAGE;
 
 export const AI_TEXT_MODEL = "google/gemini-3.6-flash";
 
