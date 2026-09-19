@@ -140,34 +140,27 @@ const pct = (n: number | undefined | null) =>
 
 
 export async function generateAreaProfile(zip: string, context: string): Promise<{ bullets: string[]; tags: string[]; name: string }> {
-  const apiKey = process.env["LOVABLE_API_KEY"];
-  if (!apiKey) throw new Error("AI key is not configured");
+  const raw = await generateAiText(
+    [
+      {
+        role: "system",
+        content:
+          "You are a housing market analyst. Respond ONLY with strict JSON: {\"name\":string,\"bullets\":[string,string,string],\"tags\":[string]}. name is the 'Neighborhood, City, State' for the ZIP. Exactly 3 bullets, each 1-2 sentences: (1) lifestyle & local vibe, (2) transit & access, (3) housing affordability & the local economy. tags: 4-5 short descriptors.",
+      },
+      { role: "user", content: `ZIP code ${zip}. Market data: ${context}` },
+    ],
+    { cacheKey: `area:${zip}:${hashKey(context)}`, ttlMs: 24 * 60 * 60_000 },
+  );
 
-  const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "openai/gpt-5-mini",
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are a housing market analyst. Respond ONLY with strict JSON: {\"name\":string,\"bullets\":[string,string,string],\"tags\":[string]}. name is the 'Neighborhood, City, State' for the ZIP. Exactly 3 bullets, each 1-2 sentences: (1) lifestyle & local vibe, (2) transit & access, (3) housing affordability & the local economy. tags: 4-5 short descriptors.",
-        },
-        { role: "user", content: `ZIP code ${zip}. Market data: ${context}` },
-      ],
-    }),
-  });
+  const parsed = raw
+    ? parseJsonBlock<{ name?: string; bullets?: string[]; tags?: string[] }>(raw)
+    : null;
 
-  if (!res.ok) throw new Error(`AI summary failed (${res.status})`);
-  const json = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-  const raw = json.choices?.[0]?.message?.content ?? "";
-  const match = raw.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error("AI summary returned an unexpected response");
-  const parsed = JSON.parse(match[0]) as { name?: string; bullets?: string[]; tags?: string[] };
+  if (!parsed) return { name: `ZIP ${zip}`, bullets: [AI_UNAVAILABLE], tags: [] };
+
   return {
     name: parsed.name ?? `ZIP ${zip}`,
-    bullets: (parsed.bullets ?? []).slice(0, 3),
+    bullets: (parsed.bullets ?? [AI_UNAVAILABLE]).slice(0, 3),
     tags: (parsed.tags ?? []).slice(0, 5),
   };
 }
