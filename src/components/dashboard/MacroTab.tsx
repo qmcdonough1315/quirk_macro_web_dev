@@ -92,6 +92,7 @@ export function MacroTab() {
       }),
     enabled: !!data,
     staleTime: 6 * 60 * 60_000,
+    gcTime: 24 * 60 * 60_000,
     retry: 1,
   });
 
@@ -100,6 +101,7 @@ export function MacroTab() {
     queryKey: ["econ-calendar"],
     queryFn: () => fetchCalendar(),
     staleTime: 6 * 60 * 60_000,
+    gcTime: 24 * 60 * 60_000,
     retry: 1,
   });
 

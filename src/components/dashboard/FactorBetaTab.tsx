@@ -176,7 +176,8 @@ export function FactorBetaTab() {
   const { data: regime, isPending: regimePending } = useQuery({
     queryKey: ["factor-regime-summary", current?.as_of_date, data?.live],
     enabled: Boolean(current && data?.live),
-    staleTime: 60 * 60_000,
+    staleTime: 24 * 60 * 60_000,
+    gcTime: 24 * 60 * 60_000,
     queryFn: () =>
       regimeFn({
         data: {
