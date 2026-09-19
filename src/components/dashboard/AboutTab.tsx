@@ -75,6 +75,29 @@ export function AboutTab() {
       </section>
 
       <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
+        <div className="mb-5 flex items-center gap-3">
+          <span className="flex size-10 items-center justify-center rounded-lg bg-primary/12 ring-1 ring-primary/30">
+            <Rocket className="size-5 text-primary" />
+          </span>
+          <h2 className="font-display text-xl font-semibold tracking-tight">Delivery Pipeline</h2>
+        </div>
+        <ol className="grid gap-4 sm:grid-cols-2">
+          {PIPELINE.map((item, i) => (
+            <li
+              key={item}
+              className="flex gap-3 rounded-lg border border-border/70 bg-secondary/30 p-4"
+            >
+              <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-primary/12 font-mono text-xs font-semibold text-primary">
+                {i + 1}
+              </span>
+              <p className="text-sm leading-relaxed text-muted-foreground">{item}</p>
+            </li>
+          ))}
+        </ol>
+      </section>
+
+
+      <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
         <h3 className="mb-4 font-display text-lg font-semibold tracking-tight">Get in Touch</h3>
         <div className="flex flex-wrap gap-3">
           <a
