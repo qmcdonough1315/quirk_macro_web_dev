@@ -344,9 +344,7 @@ export function MacroTab() {
               ))}
             </div>
           ) : recap.error ? (
-            <p className="text-sm text-muted-foreground">
-              Recap unavailable: {(recap.error as Error).message}
-            </p>
+            <p className="text-sm text-muted-foreground">{AI_UNAVAILABLE_MESSAGE}</p>
           ) : recap.data ? (
             <>
               <p className="font-display text-lg font-semibold leading-snug tracking-tight">
