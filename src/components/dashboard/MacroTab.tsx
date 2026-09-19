@@ -333,9 +333,6 @@ export function MacroTab() {
             <h3 className="font-display text-base font-semibold tracking-tight">
               Past Week Recap
             </h3>
-            <span className="ml-auto rounded-md bg-accent/10 px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-accent">
-              AI summary
-            </span>
           </div>
           {recap.isPending ? (
             <div className="space-y-2.5">
