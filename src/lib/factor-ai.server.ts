@@ -35,6 +35,10 @@ export async function generateRegimeSummary(input: RegimeInput): Promise<RegimeS
       input.expectedSharpe === null ? null : Number(input.expectedSharpe.toFixed(2)),
   });
 
+  if (context.length > 4000) {
+    return { summary: AI_UNAVAILABLE, available: false, retryable: false };
+  }
+
   const result = await generateAiTextResult(
     [
       {
