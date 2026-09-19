@@ -314,45 +314,34 @@ export interface RecapResult {
 }
 
 export async function generateMacroRecap(ctx: MacroContextInput): Promise<RecapResult> {
-  const apiKey = process.env["LOVABLE_API_KEY"];
-  if (!apiKey) throw new Error("AI key is not configured");
+  const userContent = `Reference levels — 30Y mortgage ${ctx.mortgageRate ?? "—"}%, 10Y Treasury ${
+    ctx.treasuryYield ?? "—"
+  }%, real GDP growth ${ctx.gdpGrowth ?? "—"}% (QoQ annualized), Core PCE ${
+    ctx.corePceYoY ?? "—"
+  }% YoY. Data as of ${ctx.asOf ?? "latest"}.`;
 
-  const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "openai/gpt-5-mini",
-      messages: [
-        {
-          role: "system",
-          content: [
-            'You are a macro strategist writing the "Past Week Recap" for an institutional housing & rates dashboard. Respond ONLY with strict JSON:',
-            '{"headline":string,"bullets":[string]}',
-            '- "headline": ONE sharp sentence (max 18 words) capturing the week for rates and housing.',
-            '- "bullets": EXACTLY 6 items, each 1-2 sentences, covering in order: (1) GDP growth, (2) employment data (BLS payrolls / ADP), (3) CPI & Core PCE inflation, (4) Federal Reserve policy news, (5) Housing Starts & homebuilder activity, (6) Case-Shiller / home price trends.',
-            "Use the provided reference levels where given. For reports without a provided level, characterize direction only (\"held steady\", \"ticked higher\") — never invent precise figures.",
-          ].join("\n"),
-        },
-        {
-          role: "user",
-          content: `Reference levels — 30Y mortgage ${ctx.mortgageRate ?? "—"}%, 10Y Treasury ${
-            ctx.treasuryYield ?? "—"
-          }%, real GDP growth ${ctx.gdpGrowth ?? "—"}% (QoQ annualized), Core PCE ${
-            ctx.corePceYoY ?? "—"
-          }% YoY. Data as of ${ctx.asOf ?? "latest"}.`,
-        },
-      ],
-    }),
-  });
+  const raw = await generateAiText(
+    [
+      {
+        role: "system",
+        content: [
+          'You are a macro strategist writing the "Past Week Recap" for an institutional housing & rates dashboard. Respond ONLY with strict JSON:',
+          '{"headline":string,"bullets":[string]}',
+          '- "headline": ONE sharp sentence (max 18 words) capturing the week for rates and housing.',
+          '- "bullets": EXACTLY 6 items, each 1-2 sentences, covering in order: (1) GDP growth, (2) employment data (BLS payrolls / ADP), (3) CPI & Core PCE inflation, (4) Federal Reserve policy news, (5) Housing Starts & homebuilder activity, (6) Case-Shiller / home price trends.',
+          "Use the provided reference levels where given. For reports without a provided level, characterize direction only (\"held steady\", \"ticked higher\") — never invent precise figures.",
+        ].join("\n"),
+      },
+      { role: "user", content: userContent },
+    ],
+    { cacheKey: `recap:${hashKey(userContent)}`, ttlMs: 6 * 60 * 60_000 },
+  );
 
-  if (!res.ok) throw new Error(`AI recap failed (${res.status})`);
-  const json = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-  const raw = json.choices?.[0]?.message?.content ?? "";
-  const match = raw.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error("AI recap returned an unexpected response");
-  const parsed = JSON.parse(match[0]) as { headline?: string; bullets?: string[] };
+  const parsed = raw ? parseJsonBlock<{ headline?: string; bullets?: string[] }>(raw) : null;
+  if (!parsed) return { headline: AI_UNAVAILABLE, bullets: [] };
+
   return {
-    headline: parsed.headline ?? "Rates held their range while housing data stayed mixed.",
+    headline: parsed.headline ?? AI_UNAVAILABLE,
     bullets: (parsed.bullets ?? []).slice(0, 6),
   };
 }
