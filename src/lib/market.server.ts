@@ -1,6 +1,7 @@
 /** Server-only helpers for FRED, RealtyAPI and the AI area-profile summary. */
 
-import { AI_UNAVAILABLE, generateAiText, hashKey, parseJsonBlock } from "./ai.server";
+import { COMMENTARY_CACHE_TTL_MS, getEasternRefreshWindow } from "./ai-refresh";
+import { AI_UNAVAILABLE, generateAiText, generateAiTextResult, hashKey, parseJsonBlock } from "./ai.server";
 import { fetchRealtyMarket } from "./realty.server";
 
 
@@ -140,6 +141,7 @@ const pct = (n: number | undefined | null) =>
 
 
 export async function generateAreaProfile(zip: string, context: string): Promise<{ bullets: string[]; tags: string[]; name: string }> {
+  const refreshWindow = getEasternRefreshWindow();
   const raw = await generateAiText(
     [
       {
@@ -149,7 +151,10 @@ export async function generateAreaProfile(zip: string, context: string): Promise
       },
       { role: "user", content: `ZIP code ${zip}. Market data: ${context}` },
     ],
-    { cacheKey: `area:${zip}:${hashKey(context)}`, ttlMs: 24 * 60 * 60_000 },
+    {
+      cacheKey: `area:${refreshWindow}:${zip}:${hashKey(context)}`,
+      ttlMs: COMMENTARY_CACHE_TTL_MS,
+    },
   );
 
   const parsed = raw
@@ -311,16 +316,19 @@ export interface MacroContextInput {
 export interface RecapResult {
   headline: string;
   bullets: string[];
+  available: boolean;
+  retryable: boolean;
 }
 
 export async function generateMacroRecap(ctx: MacroContextInput): Promise<RecapResult> {
+  const refreshWindow = getEasternRefreshWindow();
   const userContent = `Reference levels — 30Y mortgage ${ctx.mortgageRate ?? "—"}%, 10Y Treasury ${
     ctx.treasuryYield ?? "—"
   }%, real GDP growth ${ctx.gdpGrowth ?? "—"}% (QoQ annualized), Core PCE ${
     ctx.corePceYoY ?? "—"
   }% YoY. Data as of ${ctx.asOf ?? "latest"}.`;
 
-  const raw = await generateAiText(
+  const result = await generateAiTextResult(
     [
       {
         role: "system",
@@ -334,15 +342,29 @@ export async function generateMacroRecap(ctx: MacroContextInput): Promise<RecapR
       },
       { role: "user", content: userContent },
     ],
-    { cacheKey: `recap:${hashKey(userContent)}`, ttlMs: 6 * 60 * 60_000 },
+    {
+      cacheKey: `recap:${refreshWindow}:${hashKey(userContent)}`,
+      ttlMs: COMMENTARY_CACHE_TTL_MS,
+    },
   );
 
-  const parsed = raw ? parseJsonBlock<{ headline?: string; bullets?: string[] }>(raw) : null;
-  if (!parsed) return { headline: AI_UNAVAILABLE, bullets: [] };
+  const parsed = result.text
+    ? parseJsonBlock<{ headline?: string; bullets?: string[] }>(result.text)
+    : null;
+  if (!parsed?.headline || !parsed.bullets?.length) {
+    return {
+      headline: AI_UNAVAILABLE,
+      bullets: [],
+      available: false,
+      retryable: result.text ? true : result.retryable,
+    };
+  }
 
   return {
-    headline: parsed.headline ?? AI_UNAVAILABLE,
-    bullets: (parsed.bullets ?? []).slice(0, 6),
+    headline: parsed.headline,
+    bullets: parsed.bullets.slice(0, 6),
+    available: true,
+    retryable: false,
   };
 }
 

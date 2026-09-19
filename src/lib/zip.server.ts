@@ -1,6 +1,7 @@
 /** Server-only helper: AI "Drive-By Vibe" narrative for a ZIP row. */
 
-import { AI_UNAVAILABLE, generateAiText, hashKey, parseJsonBlock } from "./ai.server";
+import { COMMENTARY_CACHE_TTL_MS, getEasternRefreshWindow } from "./ai-refresh";
+import { AI_UNAVAILABLE, generateAiTextResult, hashKey, parseJsonBlock } from "./ai.server";
 
 export interface VibeInput {
   zip: string;
@@ -21,9 +22,11 @@ export interface VibeResult {
   /** Lifestyle, commute, schools/family environment */
   context: string;
   tags: string[];
+  available: boolean;
+  retryable: boolean;
 }
 
-function unavailable(): VibeResult {
+function unavailable(retryable: boolean): VibeResult {
   return {
     vibe: AI_UNAVAILABLE,
     settingLabel: "—",
@@ -31,13 +34,16 @@ function unavailable(): VibeResult {
     demographics: "",
     context: "",
     tags: [],
+    available: false,
+    retryable,
   };
 }
 
 export async function generateDriveByVibe(input: VibeInput): Promise<VibeResult> {
+  const refreshWindow = getEasternRefreshWindow();
   const metrics = JSON.stringify(input.metrics);
 
-  const raw = await generateAiText(
+  const result = await generateAiTextResult(
     [
       {
         role: "system",
@@ -60,12 +66,15 @@ export async function generateDriveByVibe(input: VibeInput): Promise<VibeResult>
         }. Metrics: ${metrics}`,
       },
     ],
-    { cacheKey: `vibe:${input.zip}:${hashKey(metrics)}`, ttlMs: 24 * 60 * 60_000 },
+    {
+      cacheKey: `vibe:${refreshWindow}:${input.zip}:${hashKey(metrics)}`,
+      ttlMs: COMMENTARY_CACHE_TTL_MS,
+    },
   );
 
-  if (!raw) return unavailable();
-  const parsed = parseJsonBlock<Partial<VibeResult>>(raw);
-  if (!parsed) return unavailable();
+  if (!result.text) return unavailable(result.retryable);
+  const parsed = parseJsonBlock<Partial<VibeResult>>(result.text);
+  if (!parsed?.vibe) return unavailable(true);
 
   return {
     vibe: parsed.vibe ?? AI_UNAVAILABLE,
@@ -74,5 +83,7 @@ export async function generateDriveByVibe(input: VibeInput): Promise<VibeResult>
     demographics: parsed.demographics ?? "",
     context: parsed.context ?? "",
     tags: (parsed.tags ?? []).slice(0, 4),
+    available: true,
+    retryable: false,
   };
 }
