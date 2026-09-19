@@ -399,65 +399,48 @@ export async function generateEconCalendar(): Promise<CalendarEvent[]> {
   const days = next7Days();
   const validDates = new Set(days.map((d) => d.date));
 
-  try {
-    const apiKey = process.env["LOVABLE_API_KEY"];
-    if (!apiKey) throw new Error("AI key is not configured");
+  const userContent = `List the scheduled U.S. economic releases for these dates: ${days
+    .map((d) => `${d.date} (${d.weekday})`)
+    .join(", ")}.`;
 
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "openai/gpt-5-mini",
-        messages: [
-          {
-            role: "system",
-            content: [
-              "You maintain the U.S. economic release calendar. Respond ONLY with strict JSON: an array of events:",
-              '[{"date":"YYYY-MM-DD","time":"8:30 AM ET","title":string,"category":string,"impact":"high"|"medium"|"low","consensus":string,"prior":string}]',
-              "Include only well-known scheduled U.S. macro releases for the requested dates (CPI, PPI, Core PCE, Nonfarm Payrolls, ADP, Jobless Claims, FOMC minutes/decisions, Housing Starts, Building Permits, Existing/New Home Sales, Case-Shiller HPI, GDP, Retail Sales, Consumer Sentiment, MBA Mortgage Applications).",
-              'Impact: "high" for CPI / Core PCE / payrolls / FOMC / GDP, "medium" for housing / claims / retail, "low" otherwise.',
-              'consensus / prior are short strings ("3.1%", "+175K", "4.09M"); use "—" when not applicable.',
-              "Accuracy over quantity — it is fine to return few events. Skip dates with no notable releases.",
-            ].join("\n"),
-          },
-          {
-            role: "user",
-            content: `List the scheduled U.S. economic releases for these dates: ${days
-              .map((d) => `${d.date} (${d.weekday})`)
-              .join(", ")}.`,
-          },
-        ],
-      }),
-    });
+  const raw = await generateAiText(
+    [
+      {
+        role: "system",
+        content: [
+          "You maintain the U.S. economic release calendar. Respond ONLY with strict JSON: an array of events:",
+          '[{"date":"YYYY-MM-DD","time":"8:30 AM ET","title":string,"category":string,"impact":"high"|"medium"|"low","consensus":string,"prior":string}]',
+          "Include only well-known scheduled U.S. macro releases for the requested dates (CPI, PPI, Core PCE, Nonfarm Payrolls, ADP, Jobless Claims, FOMC minutes/decisions, Housing Starts, Building Permits, Existing/New Home Sales, Case-Shiller HPI, GDP, Retail Sales, Consumer Sentiment, MBA Mortgage Applications).",
+          'Impact: "high" for CPI / Core PCE / payrolls / FOMC / GDP, "medium" for housing / claims / retail, "low" otherwise.',
+          'consensus / prior are short strings ("3.1%", "+175K", "4.09M"); use "—" when not applicable.',
+          "Accuracy over quantity — it is fine to return few events. Skip dates with no notable releases.",
+        ].join("\n"),
+      },
+      { role: "user", content: userContent },
+    ],
+    { cacheKey: `calendar:${hashKey(userContent)}`, ttlMs: 6 * 60 * 60_000 },
+  );
 
-    if (!res.ok) throw new Error(`AI calendar failed (${res.status})`);
-    const json = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-    const raw = json.choices?.[0]?.message?.content ?? "";
-    const match = raw.match(/\[[\s\S]*\]/);
-    if (!match) throw new Error("AI calendar returned an unexpected response");
-    const parsed = JSON.parse(match[0]) as Partial<CalendarEvent>[];
+  const parsed = raw ? parseJsonBlock<Partial<CalendarEvent>[]>(raw, "array") : null;
+  if (!parsed) return fallbackCalendar(days);
 
-    const events: CalendarEvent[] = parsed
-      .filter(
-        (e): e is CalendarEvent & { date: string } =>
-          typeof e?.date === "string" && validDates.has(e.date) && typeof e?.title === "string",
-      )
-      .map((e) => ({
-        date: e.date,
-        time: typeof e.time === "string" ? e.time : "—",
-        title: e.title,
-        category: typeof e.category === "string" ? e.category : "Macro",
-        impact: e.impact === "high" || e.impact === "medium" || e.impact === "low" ? e.impact : "low",
-        consensus: typeof e.consensus === "string" ? e.consensus : "—",
-        prior: typeof e.prior === "string" ? e.prior : "—",
-      }))
-      .sort((a, b) => a.date.localeCompare(b.date));
+  const events: CalendarEvent[] = parsed
+    .filter(
+      (e): e is CalendarEvent & { date: string } =>
+        typeof e?.date === "string" && validDates.has(e.date) && typeof e?.title === "string",
+    )
+    .map((e) => ({
+      date: e.date,
+      time: typeof e.time === "string" ? e.time : "—",
+      title: e.title,
+      category: typeof e.category === "string" ? e.category : "Macro",
+      impact: e.impact === "high" || e.impact === "medium" || e.impact === "low" ? e.impact : "low",
+      consensus: typeof e.consensus === "string" ? e.consensus : "—",
+      prior: typeof e.prior === "string" ? e.prior : "—",
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date));
 
-    if (!events.length) throw new Error("AI calendar returned no usable events");
-    return events;
-  } catch {
-    return fallbackCalendar(days);
-  }
+  return events.length ? events : fallbackCalendar(days);
 }
 
 /* ── Treasury yield curve + Fed funds probability ─────────────────────────── */
