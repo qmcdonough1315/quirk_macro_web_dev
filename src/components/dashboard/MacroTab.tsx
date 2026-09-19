@@ -10,6 +10,8 @@ import {
   Percent,
   Sparkles,
 } from "lucide-react";
+
+import { AI_UNAVAILABLE_MESSAGE } from "@/lib/ai-messages";
 import {
   CartesianGrid,
   Line,
@@ -90,6 +92,7 @@ export function MacroTab() {
       }),
     enabled: !!data,
     staleTime: 6 * 60 * 60_000,
+    gcTime: 24 * 60 * 60_000,
     retry: 1,
   });
 
@@ -98,6 +101,7 @@ export function MacroTab() {
     queryKey: ["econ-calendar"],
     queryFn: () => fetchCalendar(),
     staleTime: 6 * 60 * 60_000,
+    gcTime: 24 * 60 * 60_000,
     retry: 1,
   });
 
@@ -344,9 +348,7 @@ export function MacroTab() {
               ))}
             </div>
           ) : recap.error ? (
-            <p className="text-sm text-muted-foreground">
-              Recap unavailable: {(recap.error as Error).message}
-            </p>
+            <p className="text-sm text-muted-foreground">{AI_UNAVAILABLE_MESSAGE}</p>
           ) : recap.data ? (
             <>
               <p className="font-display text-lg font-semibold leading-snug tracking-tight">

@@ -13,6 +13,9 @@ import {
   Sparkles,
 } from "lucide-react";
 
+import { AI_UNAVAILABLE_MESSAGE } from "@/lib/ai-messages";
+
+
 import {
   averageZipRows,
   fetchCityRows,
@@ -429,7 +432,7 @@ export function LocalTab() {
                 <div className="h-4 w-2/3 animate-pulse rounded bg-secondary" />
               </div>
             ) : vibe.error ? (
-              <p className="text-sm text-muted-foreground">{(vibe.error as Error).message}</p>
+              <p className="text-sm text-muted-foreground">{AI_UNAVAILABLE_MESSAGE}</p>
             ) : vibe.data ? (
               <>
                 <p className="text-sm font-medium leading-relaxed text-foreground">

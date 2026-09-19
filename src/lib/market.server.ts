@@ -1,5 +1,6 @@
 /** Server-only helpers for FRED, RealtyAPI and the AI area-profile summary. */
 
+import { AI_UNAVAILABLE, generateAiText, hashKey, parseJsonBlock } from "./ai.server";
 import { fetchRealtyMarket } from "./realty.server";
 
 
@@ -139,34 +140,27 @@ const pct = (n: number | undefined | null) =>
 
 
 export async function generateAreaProfile(zip: string, context: string): Promise<{ bullets: string[]; tags: string[]; name: string }> {
-  const apiKey = process.env["LOVABLE_API_KEY"];
-  if (!apiKey) throw new Error("AI key is not configured");
+  const raw = await generateAiText(
+    [
+      {
+        role: "system",
+        content:
+          "You are a housing market analyst. Respond ONLY with strict JSON: {\"name\":string,\"bullets\":[string,string,string],\"tags\":[string]}. name is the 'Neighborhood, City, State' for the ZIP. Exactly 3 bullets, each 1-2 sentences: (1) lifestyle & local vibe, (2) transit & access, (3) housing affordability & the local economy. tags: 4-5 short descriptors.",
+      },
+      { role: "user", content: `ZIP code ${zip}. Market data: ${context}` },
+    ],
+    { cacheKey: `area:${zip}:${hashKey(context)}`, ttlMs: 24 * 60 * 60_000 },
+  );
 
-  const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "openai/gpt-5-mini",
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are a housing market analyst. Respond ONLY with strict JSON: {\"name\":string,\"bullets\":[string,string,string],\"tags\":[string]}. name is the 'Neighborhood, City, State' for the ZIP. Exactly 3 bullets, each 1-2 sentences: (1) lifestyle & local vibe, (2) transit & access, (3) housing affordability & the local economy. tags: 4-5 short descriptors.",
-        },
-        { role: "user", content: `ZIP code ${zip}. Market data: ${context}` },
-      ],
-    }),
-  });
+  const parsed = raw
+    ? parseJsonBlock<{ name?: string; bullets?: string[]; tags?: string[] }>(raw)
+    : null;
 
-  if (!res.ok) throw new Error(`AI summary failed (${res.status})`);
-  const json = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-  const raw = json.choices?.[0]?.message?.content ?? "";
-  const match = raw.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error("AI summary returned an unexpected response");
-  const parsed = JSON.parse(match[0]) as { name?: string; bullets?: string[]; tags?: string[] };
+  if (!parsed) return { name: `ZIP ${zip}`, bullets: [AI_UNAVAILABLE], tags: [] };
+
   return {
     name: parsed.name ?? `ZIP ${zip}`,
-    bullets: (parsed.bullets ?? []).slice(0, 3),
+    bullets: (parsed.bullets ?? [AI_UNAVAILABLE]).slice(0, 3),
     tags: (parsed.tags ?? []).slice(0, 5),
   };
 }
@@ -320,45 +314,34 @@ export interface RecapResult {
 }
 
 export async function generateMacroRecap(ctx: MacroContextInput): Promise<RecapResult> {
-  const apiKey = process.env["LOVABLE_API_KEY"];
-  if (!apiKey) throw new Error("AI key is not configured");
+  const userContent = `Reference levels — 30Y mortgage ${ctx.mortgageRate ?? "—"}%, 10Y Treasury ${
+    ctx.treasuryYield ?? "—"
+  }%, real GDP growth ${ctx.gdpGrowth ?? "—"}% (QoQ annualized), Core PCE ${
+    ctx.corePceYoY ?? "—"
+  }% YoY. Data as of ${ctx.asOf ?? "latest"}.`;
 
-  const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "openai/gpt-5-mini",
-      messages: [
-        {
-          role: "system",
-          content: [
-            'You are a macro strategist writing the "Past Week Recap" for an institutional housing & rates dashboard. Respond ONLY with strict JSON:',
-            '{"headline":string,"bullets":[string]}',
-            '- "headline": ONE sharp sentence (max 18 words) capturing the week for rates and housing.',
-            '- "bullets": EXACTLY 6 items, each 1-2 sentences, covering in order: (1) GDP growth, (2) employment data (BLS payrolls / ADP), (3) CPI & Core PCE inflation, (4) Federal Reserve policy news, (5) Housing Starts & homebuilder activity, (6) Case-Shiller / home price trends.',
-            "Use the provided reference levels where given. For reports without a provided level, characterize direction only (\"held steady\", \"ticked higher\") — never invent precise figures.",
-          ].join("\n"),
-        },
-        {
-          role: "user",
-          content: `Reference levels — 30Y mortgage ${ctx.mortgageRate ?? "—"}%, 10Y Treasury ${
-            ctx.treasuryYield ?? "—"
-          }%, real GDP growth ${ctx.gdpGrowth ?? "—"}% (QoQ annualized), Core PCE ${
-            ctx.corePceYoY ?? "—"
-          }% YoY. Data as of ${ctx.asOf ?? "latest"}.`,
-        },
-      ],
-    }),
-  });
+  const raw = await generateAiText(
+    [
+      {
+        role: "system",
+        content: [
+          'You are a macro strategist writing the "Past Week Recap" for an institutional housing & rates dashboard. Respond ONLY with strict JSON:',
+          '{"headline":string,"bullets":[string]}',
+          '- "headline": ONE sharp sentence (max 18 words) capturing the week for rates and housing.',
+          '- "bullets": EXACTLY 6 items, each 1-2 sentences, covering in order: (1) GDP growth, (2) employment data (BLS payrolls / ADP), (3) CPI & Core PCE inflation, (4) Federal Reserve policy news, (5) Housing Starts & homebuilder activity, (6) Case-Shiller / home price trends.',
+          "Use the provided reference levels where given. For reports without a provided level, characterize direction only (\"held steady\", \"ticked higher\") — never invent precise figures.",
+        ].join("\n"),
+      },
+      { role: "user", content: userContent },
+    ],
+    { cacheKey: `recap:${hashKey(userContent)}`, ttlMs: 6 * 60 * 60_000 },
+  );
 
-  if (!res.ok) throw new Error(`AI recap failed (${res.status})`);
-  const json = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-  const raw = json.choices?.[0]?.message?.content ?? "";
-  const match = raw.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error("AI recap returned an unexpected response");
-  const parsed = JSON.parse(match[0]) as { headline?: string; bullets?: string[] };
+  const parsed = raw ? parseJsonBlock<{ headline?: string; bullets?: string[] }>(raw) : null;
+  if (!parsed) return { headline: AI_UNAVAILABLE, bullets: [] };
+
   return {
-    headline: parsed.headline ?? "Rates held their range while housing data stayed mixed.",
+    headline: parsed.headline ?? AI_UNAVAILABLE,
     bullets: (parsed.bullets ?? []).slice(0, 6),
   };
 }
@@ -416,65 +399,48 @@ export async function generateEconCalendar(): Promise<CalendarEvent[]> {
   const days = next7Days();
   const validDates = new Set(days.map((d) => d.date));
 
-  try {
-    const apiKey = process.env["LOVABLE_API_KEY"];
-    if (!apiKey) throw new Error("AI key is not configured");
+  const userContent = `List the scheduled U.S. economic releases for these dates: ${days
+    .map((d) => `${d.date} (${d.weekday})`)
+    .join(", ")}.`;
 
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "openai/gpt-5-mini",
-        messages: [
-          {
-            role: "system",
-            content: [
-              "You maintain the U.S. economic release calendar. Respond ONLY with strict JSON: an array of events:",
-              '[{"date":"YYYY-MM-DD","time":"8:30 AM ET","title":string,"category":string,"impact":"high"|"medium"|"low","consensus":string,"prior":string}]',
-              "Include only well-known scheduled U.S. macro releases for the requested dates (CPI, PPI, Core PCE, Nonfarm Payrolls, ADP, Jobless Claims, FOMC minutes/decisions, Housing Starts, Building Permits, Existing/New Home Sales, Case-Shiller HPI, GDP, Retail Sales, Consumer Sentiment, MBA Mortgage Applications).",
-              'Impact: "high" for CPI / Core PCE / payrolls / FOMC / GDP, "medium" for housing / claims / retail, "low" otherwise.',
-              'consensus / prior are short strings ("3.1%", "+175K", "4.09M"); use "—" when not applicable.',
-              "Accuracy over quantity — it is fine to return few events. Skip dates with no notable releases.",
-            ].join("\n"),
-          },
-          {
-            role: "user",
-            content: `List the scheduled U.S. economic releases for these dates: ${days
-              .map((d) => `${d.date} (${d.weekday})`)
-              .join(", ")}.`,
-          },
-        ],
-      }),
-    });
+  const raw = await generateAiText(
+    [
+      {
+        role: "system",
+        content: [
+          "You maintain the U.S. economic release calendar. Respond ONLY with strict JSON: an array of events:",
+          '[{"date":"YYYY-MM-DD","time":"8:30 AM ET","title":string,"category":string,"impact":"high"|"medium"|"low","consensus":string,"prior":string}]',
+          "Include only well-known scheduled U.S. macro releases for the requested dates (CPI, PPI, Core PCE, Nonfarm Payrolls, ADP, Jobless Claims, FOMC minutes/decisions, Housing Starts, Building Permits, Existing/New Home Sales, Case-Shiller HPI, GDP, Retail Sales, Consumer Sentiment, MBA Mortgage Applications).",
+          'Impact: "high" for CPI / Core PCE / payrolls / FOMC / GDP, "medium" for housing / claims / retail, "low" otherwise.',
+          'consensus / prior are short strings ("3.1%", "+175K", "4.09M"); use "—" when not applicable.',
+          "Accuracy over quantity — it is fine to return few events. Skip dates with no notable releases.",
+        ].join("\n"),
+      },
+      { role: "user", content: userContent },
+    ],
+    { cacheKey: `calendar:${hashKey(userContent)}`, ttlMs: 6 * 60 * 60_000 },
+  );
 
-    if (!res.ok) throw new Error(`AI calendar failed (${res.status})`);
-    const json = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-    const raw = json.choices?.[0]?.message?.content ?? "";
-    const match = raw.match(/\[[\s\S]*\]/);
-    if (!match) throw new Error("AI calendar returned an unexpected response");
-    const parsed = JSON.parse(match[0]) as Partial<CalendarEvent>[];
+  const parsed = raw ? parseJsonBlock<Partial<CalendarEvent>[]>(raw, "array") : null;
+  if (!parsed) return fallbackCalendar(days);
 
-    const events: CalendarEvent[] = parsed
-      .filter(
-        (e): e is CalendarEvent & { date: string } =>
-          typeof e?.date === "string" && validDates.has(e.date) && typeof e?.title === "string",
-      )
-      .map((e) => ({
-        date: e.date,
-        time: typeof e.time === "string" ? e.time : "—",
-        title: e.title,
-        category: typeof e.category === "string" ? e.category : "Macro",
-        impact: e.impact === "high" || e.impact === "medium" || e.impact === "low" ? e.impact : "low",
-        consensus: typeof e.consensus === "string" ? e.consensus : "—",
-        prior: typeof e.prior === "string" ? e.prior : "—",
-      }))
-      .sort((a, b) => a.date.localeCompare(b.date));
+  const events: CalendarEvent[] = parsed
+    .filter(
+      (e): e is CalendarEvent & { date: string } =>
+        typeof e?.date === "string" && validDates.has(e.date) && typeof e?.title === "string",
+    )
+    .map((e) => ({
+      date: e.date,
+      time: typeof e.time === "string" ? e.time : "—",
+      title: e.title,
+      category: typeof e.category === "string" ? e.category : "Macro",
+      impact: e.impact === "high" || e.impact === "medium" || e.impact === "low" ? e.impact : "low",
+      consensus: typeof e.consensus === "string" ? e.consensus : "—",
+      prior: typeof e.prior === "string" ? e.prior : "—",
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date));
 
-    if (!events.length) throw new Error("AI calendar returned no usable events");
-    return events;
-  } catch {
-    return fallbackCalendar(days);
-  }
+  return events.length ? events : fallbackCalendar(days);
 }
 
 /* ── Treasury yield curve + Fed funds probability ─────────────────────────── */
