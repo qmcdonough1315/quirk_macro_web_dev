@@ -85,8 +85,6 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:title", content: "Quirk Macro — Macro & Personal Finance Dashboard" },
       { property: "og:description", content: "Personal financial analytics. Institutional-grade dashboard tracking macroeconomic data, housing market trends, market factors, and cash management." },
       { name: "twitter:description", content: "Personal financial analytics. Institutional-grade dashboard tracking macroeconomic data, housing market trends, market factors, and cash management." },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/808d2cc801694b91877d8d28aed7521c/id-preview-c2f20b0d--dfb3d748-cd12-4930-a6e5-8e5857947bd7.lovable.app-1786737265465.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/808d2cc801694b91877d8d28aed7521c/id-preview-c2f20b0d--dfb3d748-cd12-4930-a6e5-8e5857947bd7.lovable.app-1786737265465.png" },
     ],
     links: [
       {
