@@ -18,8 +18,11 @@ import {
 } from "@/lib/factor-beta";
 import { getRegimeSummary } from "@/lib/factor-ai.functions";
 import { useAiRefreshWindow } from "@/hooks/use-ai-refresh-window";
-import { requireAvailableCommentary, shouldRetryCommentary } from "@/lib/ai-messages";
-import { AI_UNAVAILABLE_MESSAGE } from "@/lib/ai-messages";
+import {
+  AI_UNAVAILABLE_MESSAGE,
+  requireAvailableCommentary,
+  shouldRetryCommentary,
+} from "@/lib/ai-messages";
 
 const pct = (n: number | null | undefined, digits = 2) =>
   typeof n === "number" && Number.isFinite(n) ? `${n > 0 ? "+" : ""}${n.toFixed(digits)}%` : "—";
