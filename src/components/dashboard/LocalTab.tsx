@@ -13,7 +13,12 @@ import {
   Sparkles,
 } from "lucide-react";
 
-import { AI_UNAVAILABLE_MESSAGE } from "@/lib/ai-messages";
+import { useAiRefreshWindow } from "@/hooks/use-ai-refresh-window";
+import {
+  AI_UNAVAILABLE_MESSAGE,
+  requireAvailableCommentary,
+  shouldRetryCommentary,
+} from "@/lib/ai-messages";
 
 
 import {
@@ -59,6 +64,7 @@ function Metric({
 type LookupResult = { kind: "zip"; row: ZipRow } | { kind: "city"; rows: ZipRow[] };
 
 export function LocalTab() {
+  const commentaryWindow = useAiRefreshWindow();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [geoError, setGeoError] = useState<string | null>(null);
@@ -117,16 +123,20 @@ export function LocalTab() {
   }, [row]);
 
   const fetchVibe = useServerFn(getDriveByVibe);
-  const vibe = useMutation({ mutationFn: fetchVibe });
-
-  useEffect(() => {
-    if (row && metrics && activeZip) {
-      vibe.mutate({
+  const vibe = useQuery({
+    queryKey: ["drive-by-vibe", commentaryWindow, activeZip, metrics],
+    queryFn: () => {
+      if (!row || !metrics || !activeZip) throw new Error("Location data is unavailable");
+      return fetchVibe({
         data: { zip: activeZip, city: row.city, state: row.state, metrics },
-      });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [row]);
+      }).then(requireAvailableCommentary);
+    },
+    enabled: Boolean(row && metrics && activeZip),
+    staleTime: Infinity,
+    gcTime: 24 * 60 * 60_000,
+    retry: (failureCount, queryError) => shouldRetryCommentary(failureCount, queryError),
+    retryDelay: 5_000,
+  });
 
   const fetchHot = useServerFn(getHotProperties);
   const hot = useQuery({

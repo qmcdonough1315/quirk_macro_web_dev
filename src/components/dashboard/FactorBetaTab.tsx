@@ -17,6 +17,8 @@ import {
   type PortfolioHolding,
 } from "@/lib/factor-beta";
 import { getRegimeSummary } from "@/lib/factor-ai.functions";
+import { useAiRefreshWindow } from "@/hooks/use-ai-refresh-window";
+import { requireAvailableCommentary, shouldRetryCommentary } from "@/lib/ai-messages";
 
 const pct = (n: number | null | undefined, digits = 2) =>
   typeof n === "number" && Number.isFinite(n) ? `${n > 0 ? "+" : ""}${n.toFixed(digits)}%` : "—";
@@ -164,6 +166,7 @@ function PreviousRunCard({ run }: { run: FactorBetaRow }) {
 }
 
 export function FactorBetaTab() {
+  const commentaryWindow = useAiRefreshWindow();
   const { data, isPending } = useQuery({
     queryKey: ["factor-predictions"],
     queryFn: fetchFactorBetaData,
@@ -174,9 +177,9 @@ export function FactorBetaTab() {
 
   const regimeFn = useServerFn(getRegimeSummary);
   const { data: regime, isPending: regimePending } = useQuery({
-    queryKey: ["factor-regime-summary", current?.as_of_date, data?.live],
+    queryKey: ["factor-regime-summary", commentaryWindow, current?.as_of_date, data?.live],
     enabled: Boolean(current && data?.live),
-    staleTime: 24 * 60 * 60_000,
+    staleTime: Infinity,
     gcTime: 24 * 60 * 60_000,
     queryFn: () =>
       regimeFn({
@@ -192,7 +195,9 @@ export function FactorBetaTab() {
           expectedVol: current!.expected_vol,
           expectedSharpe: current!.expected_sharpe,
         },
-      }),
+      }).then(requireAvailableCommentary),
+    retry: (failureCount, queryError) => shouldRetryCommentary(failureCount, queryError),
+    retryDelay: 5_000,
   });
 
   const summary = data?.live ? regime?.summary : current?.regime_summary;
