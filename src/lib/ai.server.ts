@@ -4,7 +4,7 @@ import { AI_UNAVAILABLE_MESSAGE } from "./ai-messages";
 
 export const AI_UNAVAILABLE = AI_UNAVAILABLE_MESSAGE;
 
-export const AI_TEXT_MODEL = "gemini-3.6-flash";
+export const AI_TEXT_MODEL = "gemini-3.5-flash";
 
 export interface AiMessage {
   role: "system" | "user" | "assistant";
