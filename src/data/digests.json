@@ -1,0 +1,90 @@
+[
+  {
+    "title": "Growth Holds, the Path Is Narrower",
+    "date": "2026-10-26",
+    "summary": "The week settled into a familiar late-cycle mix: activity is still expanding, inflation is cooling only gradually, and markets are paying more attention to how long policy stays restrictive than to any single print.",
+    "sections": [
+      {
+        "sector": "Rates",
+        "bullets": [
+          "Front-end pricing stayed sensitive to the next labor and inflation releases rather than to a change in the policy path.",
+          "The curve remained the cleaner signal than any one meeting: term premium, not the next cut, is doing most of the work."
+        ]
+      },
+      {
+        "sector": "Equities",
+        "bullets": [
+          "Large-cap earnings continued to carry index-level returns, with breadth still lagging the headline indexes.",
+          "Quality and balance-sheet strength stayed preferred to high-duration stories that need a faster easing cycle."
+        ]
+      },
+      {
+        "sector": "Credit",
+        "bullets": [
+          "Investment-grade spreads held in a tight range, which reads as confidence in the soft-landing case rather than a hunt for yield.",
+          "Lower-quality credit is where a growth miss would show up first; that pocket is worth watching more than the indexes."
+        ]
+      },
+      {
+        "sector": "Housing",
+        "bullets": [
+          "Mortgage rates remain the binding constraint. Affordability improves only when yields give back ground, not when asking prices stall.",
+          "Existing-home turnover is still the scarce input. New listings, not another price forecast, tell you whether the market is thawing."
+        ]
+      }
+    ]
+  },
+  {
+    "title": "A Week for the Data, Not the Narrative",
+    "date": "2026-11-02",
+    "summary": "This week's macro setup is still a soft landing that has to be earned. Growth has not rolled over, inflation is no longer the emergency, and the open question is whether policy can ease without restoking the parts of the economy that never really cooled — housing, services, and easy financial conditions.",
+    "sections": [
+      {
+        "sector": "Rates",
+        "bullets": [
+          "Treasury yields are trading the gap between a patient Fed and a market that wants a cleaner easing path. Until inflation prints confirm the slowdown, rallies in the front end are likely to fade.",
+          "Real yields matter more than the nominal headline for both equities and mortgages. A drift higher in real rates tightens conditions even if the policy rate is unchanged.",
+          "Curve shape is the cross-check: a bull steepener would say growth concerns are winning; a bear flattener would say inflation is back in the driver's seat."
+        ]
+      },
+      {
+        "sector": "Equities",
+        "bullets": [
+          "Index leadership is still concentrated. That can persist, but it means the tape is less informative about the broad economy than the earnings of a few large companies.",
+          "A slower easing path is a headwind for long-duration growth and a relative support for profitable, cash-generative businesses.",
+          "Watch revisions, not the beat rate. Guidance into year-end is the cleaner read on whether margins are absorbing higher funding costs."
+        ]
+      },
+      {
+        "sector": "Credit",
+        "bullets": [
+          "Spreads remain tight enough that credit is confirming the growth outlook, not hedging it. There is little cushion if the labor market weakens faster than expected.",
+          "Issuers with near-term refinancing needs are the practical stress test. The new-issue concession, more than the index spread, shows whether buyers are still price-insensitive.",
+          "Investment-grade and high-yield are telling the same story for now. A divergence — high yield widening while investment grade stays pinned — would be the early warning."
+        ]
+      },
+      {
+        "sector": "Housing",
+        "bullets": [
+          "Housing is still the transmission channel that has not fully reset. Mortgage rates near recent highs keep existing owners locked in and hold transaction volume down.",
+          "Price resilience alongside weak sales is a supply story, not a demand boom. Affordability does not heal until either incomes catch up or the mortgage rate gives way.",
+          "Local markets will keep diverging. National averages hide the metros where inventory is finally rising and the ones where it is not."
+        ]
+      },
+      {
+        "sector": "Commodities",
+        "bullets": [
+          "Energy is the swing factor for the near-term inflation print. A supply shock would complicate a Fed that is trying to look through the last mile.",
+          "Industrial metals are the growth cross-check. Persistent weakness there would argue the soft data is softer than the equity tape implies."
+        ]
+      },
+      {
+        "sector": "Foreign Exchange",
+        "bullets": [
+          "The dollar still tracks relative real yields. A Fed that stays higher for longer supports the dollar and tightens global financial conditions at the margin.",
+          "A sustained dollar fade would be the market voting that the easing cycle is real, and it would ease pressure on foreign borrowers with dollar liabilities."
+        ]
+      }
+    ]
+  }
+]

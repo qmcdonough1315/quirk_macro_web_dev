@@ -11,12 +11,6 @@ import {
   Sparkles,
 } from "lucide-react";
 
-import { useAiRefreshWindow } from "@/hooks/use-ai-refresh-window";
-import {
-  AI_UNAVAILABLE_MESSAGE,
-  requireAvailableCommentary,
-  shouldRetryCommentary,
-} from "@/lib/ai-messages";
 import {
   CartesianGrid,
   Line,
@@ -27,12 +21,8 @@ import {
   YAxis,
 } from "recharts";
 
-import {
-  getEconCalendar,
-  getMacroRecap,
-  getMacroSnapshot,
-  getRatesOutlook,
-} from "@/lib/market.functions";
+import { getEconCalendar, getMacroSnapshot, getRatesOutlook } from "@/lib/market.functions";
+import { WeeklyDigest } from "@/components/dashboard/WeeklyDigest";
 
 function CurveTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
@@ -66,7 +56,6 @@ const fmtDay = (iso: string) =>
   });
 
 export function MacroTab() {
-  const commentaryWindow = useAiRefreshWindow();
   const fetchMacro = useServerFn(getMacroSnapshot);
   const { data, isPending, error } = useQuery({
     queryKey: ["macro-snapshot"],
@@ -81,26 +70,6 @@ export function MacroTab() {
     queryFn: () => fetchRates(),
     staleTime: 60 * 60_000,
     retry: 1,
-  });
-
-  const fetchRecap = useServerFn(getMacroRecap);
-  const recap = useQuery({
-    queryKey: ["macro-recap", commentaryWindow, data?.updated],
-    queryFn: () =>
-      fetchRecap({
-        data: {
-          mortgageRate: data!.mortgage.latest,
-          treasuryYield: data!.treasury.latest,
-          gdpGrowth: data!.gdp.latest,
-          corePceYoY: data!.corePce.latest,
-          asOf: data!.updated,
-        },
-      }).then(requireAvailableCommentary),
-    enabled: !!data,
-    staleTime: Infinity,
-    gcTime: 24 * 60 * 60_000,
-    retry: (failureCount, queryError) => shouldRetryCommentary(failureCount, queryError),
-    retryDelay: 5_000,
   });
 
   const fetchCalendar = useServerFn(getEconCalendar);
@@ -332,42 +301,13 @@ export function MacroTab() {
         </div>
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-2">
-        {/* Past Week Recap */}
+      <section className="grid items-start gap-4 lg:grid-cols-2">
         <div className="panel p-6">
           <div className="mb-4 flex items-center gap-2.5">
             <Sparkles className="size-4 text-accent" />
-            <h3 className="font-display text-base font-semibold tracking-tight">
-              Past Week Recap
-            </h3>
+            <h3 className="font-display text-base font-semibold tracking-tight">Past Week Recap</h3>
           </div>
-          {recap.isPending ? (
-            <div className="space-y-2.5">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="h-4 animate-pulse rounded bg-secondary"
-                  style={{ width: `${92 - i * 7}%` }}
-                />
-              ))}
-            </div>
-          ) : recap.error ? (
-            <p className="text-sm text-muted-foreground">{AI_UNAVAILABLE_MESSAGE}</p>
-          ) : recap.data ? (
-            <>
-              <p className="font-display text-lg font-semibold leading-snug tracking-tight">
-                {recap.data.headline}
-              </p>
-              <ul className="mt-4 space-y-3">
-                {recap.data.bullets.map((b, i) => (
-                  <li key={i} className="flex gap-3 text-sm text-muted-foreground">
-                    <span className="mt-[7px] size-1.5 shrink-0 rounded-full bg-accent" />
-                    <span className="leading-relaxed">{b}</span>
-                  </li>
-                ))}
-              </ul>
-            </>
-          ) : null}
+          <WeeklyDigest />
         </div>
 
         {/* Upcoming 7-day calendar */}
