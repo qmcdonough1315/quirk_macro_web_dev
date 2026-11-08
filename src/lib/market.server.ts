@@ -1,7 +1,7 @@
 /** Server-only helpers for FRED, RealtyAPI and the AI area-profile summary. */
 
 import { COMMENTARY_CACHE_TTL_MS, getEasternRefreshWindow } from "./ai-refresh";
-import { AI_UNAVAILABLE, generateAiText, generateAiTextResult, hashKey, parseJsonBlock } from "./ai.server";
+import { AI_UNAVAILABLE, generateAiText, hashKey, parseJsonBlock } from "./ai.server";
 import { fetchRealtyMarket } from "./realty.server";
 
 
@@ -302,69 +302,6 @@ export async function fetchInflationYoY(
     latest: Math.round(latest * 100) / 100,
     latestDate: obs[obs.length - 1]!.date,
     changePp: typeof prev === "number" ? Math.round((latest - prev) * 100) / 100 : 0,
-  };
-}
-
-export interface MacroContextInput {
-  mortgageRate?: number;
-  treasuryYield?: number;
-  gdpGrowth?: number;
-  corePceYoY?: number;
-  asOf?: string;
-}
-
-export interface RecapResult {
-  headline: string;
-  bullets: string[];
-  available: boolean;
-  retryable: boolean;
-}
-
-export async function generateMacroRecap(ctx: MacroContextInput): Promise<RecapResult> {
-  const refreshWindow = getEasternRefreshWindow();
-  const userContent = `Reference levels — 30Y mortgage ${ctx.mortgageRate ?? "—"}%, 10Y Treasury ${
-    ctx.treasuryYield ?? "—"
-  }%, real GDP growth ${ctx.gdpGrowth ?? "—"}% (QoQ annualized), Core PCE ${
-    ctx.corePceYoY ?? "—"
-  }% YoY. Data as of ${ctx.asOf ?? "latest"}.`;
-
-  const result = await generateAiTextResult(
-    [
-      {
-        role: "system",
-        content: [
-          'You are a macro strategist writing the "Past Week Recap" for an institutional housing & rates dashboard. Respond ONLY with strict JSON:',
-          '{"headline":string,"bullets":[string]}',
-          '- "headline": ONE sharp sentence (max 18 words) capturing the week for rates and housing.',
-          '- "bullets": EXACTLY 6 items, each 1-2 sentences, covering in order: (1) GDP growth, (2) employment data (BLS payrolls / ADP), (3) CPI & Core PCE inflation, (4) Federal Reserve policy news, (5) Housing Starts & homebuilder activity, (6) Case-Shiller / home price trends.',
-          "Use the provided reference levels where given. For reports without a provided level, characterize direction only (\"held steady\", \"ticked higher\") — never invent precise figures.",
-        ].join("\n"),
-      },
-      { role: "user", content: userContent },
-    ],
-    {
-      cacheKey: `recap:${refreshWindow}:${hashKey(userContent)}`,
-      ttlMs: COMMENTARY_CACHE_TTL_MS,
-    },
-  );
-
-  const parsed = result.text
-    ? parseJsonBlock<{ headline?: string; bullets?: string[] }>(result.text)
-    : null;
-  if (!parsed?.headline || !parsed.bullets?.length) {
-    return {
-      headline: AI_UNAVAILABLE,
-      bullets: [],
-      available: false,
-      retryable: result.text ? true : result.retryable,
-    };
-  }
-
-  return {
-    headline: parsed.headline,
-    bullets: parsed.bullets.slice(0, 6),
-    available: true,
-    retryable: false,
   };
 }
 

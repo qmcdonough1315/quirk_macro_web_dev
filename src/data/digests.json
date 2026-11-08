@@ -86,5 +86,33 @@
         ]
       }
     ]
+  },
+  {
+    "title": "Payrolls Took the Week Back",
+    "date": "2026-11-08",
+    "summary": "The week opened on a Democratic sweep of both chambers and a violent Thursday break in AI stocks, then closed on a labor market that refused to cool. The Nasdaq, the S&P 500, and the Russell 2000 each logged their worst session since April 2025, and the Magnificent Seven lost more than $1 trillion of market value that day.",
+    "sections": [
+      {
+        "sector": "Rates",
+        "bullets": [
+          "October payrolls rose 165,000, against a Dow Jones consensus of 59,000. Unemployment fell to 4.1% from 4.2%. August and September were revised up by a combined 84,000, after September itself added only 29,000.",
+          "The 2-year yield finished Friday at 4.522%, the 10-year at 4.864%, and the 30-year at 5.263%. Fed funds futures priced a better than 77% chance of a quarter-point hike on December 9, up from 66% the day before. The funds rate stands at 3.75% to 4.00%.",
+          "Yields had fallen earlier in the week on the election result and on haven buying during the equity selloff. The jobs report reversed that move, and the front end did most of the work."
+        ]
+      },
+      {
+        "sector": "Equities",
+        "bullets": [
+          "Thursday's unwind was not a mega-cap-only event. The Russell 2000 fell with the Nasdaq.",
+          "The election added a second question to a tape already doubting how fast data-center spending turns into cash flow: whether a Congress under Democratic control slows that construction."
+        ]
+      },
+      {
+        "sector": "Housing",
+        "bullets": [
+          "The rate backup is what reaches housing. A 10-year near 4.86% and a market leaning toward another hike leave the mortgage payment, rather than the listing price, as the constraint on turnover."
+        ]
+      }
+    ]
   }
 ]

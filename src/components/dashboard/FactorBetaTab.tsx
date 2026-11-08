@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -16,13 +15,7 @@ import {
   type FactorBetaRow,
   type PortfolioHolding,
 } from "@/lib/factor-beta";
-import { getRegimeSummary } from "@/lib/factor-ai.functions";
-import { useAiRefreshWindow } from "@/hooks/use-ai-refresh-window";
-import {
-  AI_UNAVAILABLE_MESSAGE,
-  requireAvailableCommentary,
-  shouldRetryCommentary,
-} from "@/lib/ai-messages";
+import { RegimeRead } from "@/components/dashboard/RegimeRead";
 
 const pct = (n: number | null | undefined, digits = 2) =>
   typeof n === "number" && Number.isFinite(n) ? `${n > 0 ? "+" : ""}${n.toFixed(digits)}%` : "—";
@@ -170,7 +163,6 @@ function PreviousRunCard({ run }: { run: FactorBetaRow }) {
 }
 
 export function FactorBetaTab() {
-  const commentaryWindow = useAiRefreshWindow();
   const { data, isPending } = useQuery({
     queryKey: ["factor-predictions"],
     queryFn: fetchFactorBetaData,
@@ -179,32 +171,6 @@ export function FactorBetaTab() {
 
   const current = data?.current;
 
-  const regimeFn = useServerFn(getRegimeSummary);
-  const { data: regime, isPending: regimePending, error: regimeError } = useQuery({
-    queryKey: ["factor-regime-summary", commentaryWindow, current?.as_of_date, data?.live],
-    enabled: Boolean(current && data?.live),
-    staleTime: Infinity,
-    gcTime: 24 * 60 * 60_000,
-    queryFn: () =>
-      regimeFn({
-        data: {
-          asOfDate: current!.as_of_date,
-          factors: current!.factors.map((f) => ({
-            code: f.code,
-            name: f.name,
-            predicted: f.predicted,
-          })),
-          holdings: current!.portfolio.map((h) => ({ ticker: h.ticker, weight: h.weight })),
-          expectedReturn: current!.expected_return,
-          expectedVol: current!.expected_vol,
-          expectedSharpe: current!.expected_sharpe,
-        },
-      }).then(requireAvailableCommentary),
-    retry: (failureCount, queryError) => shouldRetryCommentary(failureCount, queryError),
-    retryDelay: 5_000,
-  });
-
-  const summary = data?.live ? regime?.summary : current?.regime_summary;
   const showPrior = (current?.factors ?? []).some((f) => f.prior !== null);
   const showConfidence = (current?.factors ?? []).some((f) => f.confidence !== null);
 
@@ -230,13 +196,7 @@ export function FactorBetaTab() {
             {current ? ` · ${current.as_of_date}` : ""}
           </span>
         </div>
-        {isPending || (data?.live && regimePending) ? (
-          <div className="h-20 animate-pulse rounded-lg bg-secondary/40" />
-        ) : (
-          <p className="max-w-4xl text-sm leading-relaxed text-muted-foreground">
-            {regimeError ? AI_UNAVAILABLE_MESSAGE : summary}
-          </p>
-        )}
+        <RegimeRead />
       </section>
 
       <section className="panel p-6">
