@@ -6,7 +6,7 @@ export default defineTool({
   name: "get_etf_factor_model",
   title: "Get ETF factor model",
   description:
-    "Latest run of the Fama-French / Carhart factor model: predicted 3-month factor excess returns (Mkt-RF, SMB, HML, RMW, CMA, WML), the 10-ETF target portfolio with weights and per-fund expected returns, and portfolio expected return, volatility and Sharpe ratio. Informational only, not investment advice.",
+    "Latest run of the Fama-French / Carhart factor model: predicted 3-month factor excess returns (Mkt-RF, SMB, HML, RMW, CMA, WML), the target ETF portfolio with weights and per-fund expected returns (holdings count is variable under single-name and category caps), and portfolio expected return, volatility and Sharpe ratio. Informational only, not investment advice.",
   inputSchema: {},
   handler: async () => {
     const data = await fetchFactorBetaData();

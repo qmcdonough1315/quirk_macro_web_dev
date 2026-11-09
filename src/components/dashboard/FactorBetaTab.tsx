@@ -1,20 +1,21 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import {
   ArrowDownRight,
   ArrowUpRight,
   Brain,
   ChevronDown,
   History,
+  Landmark,
   PieChart,
+  Scale,
   Sigma,
 } from "lucide-react";
 
-import {
-  fetchFactorBetaData,
-  type FactorBetaRow,
-  type PortfolioHolding,
-} from "@/lib/factor-beta";
+import { fetchFactorBetaData, type FactorBetaRow, type PortfolioHolding } from "@/lib/factor-beta";
+import { getPaperPortfolio, type PaperPortfolioSnapshot } from "@/lib/paper-portfolio.functions";
+import { STRATEGY_INCEPTION_DATE, WEEKLY_CONTRIBUTION_USD } from "@/lib/paper-portfolio-rules";
 import { RegimeRead } from "@/components/dashboard/RegimeRead";
 
 const pct = (n: number | null | undefined, digits = 2) =>
@@ -22,6 +23,16 @@ const pct = (n: number | null | undefined, digits = 2) =>
 
 const plain = (n: number | null | undefined, digits = 2, suffix = "") =>
   typeof n === "number" && Number.isFinite(n) ? `${n.toFixed(digits)}${suffix}` : "—";
+
+const usd = (n: number | null | undefined, digits = 0) =>
+  typeof n === "number" && Number.isFinite(n)
+    ? n.toLocaleString("en-US", {
+        style: "currency",
+        currency: "USD",
+        minimumFractionDigits: digits,
+        maximumFractionDigits: digits,
+      })
+    : "—";
 
 function DeltaBadge({ value }: { value: number }) {
   const good = value >= 0;
@@ -54,14 +65,14 @@ function HoldingsTable({ holdings }: { holdings: PortfolioHolding[] }) {
         <tbody>
           {holdings.map((h) => (
             <tr key={h.ticker} className="border-b border-border/50 last:border-0">
-              <td className="py-3 pr-4 font-mono text-sm font-medium text-foreground">{h.ticker}</td>
+              <td className="py-3 pr-4 font-mono text-sm font-medium text-foreground">
+                {h.ticker}
+              </td>
               <td className="py-3 pr-4 text-muted-foreground">{h.fund || "—"}</td>
               {showReturn ? (
                 <td className="py-3 pr-4 text-right font-mono tabular-nums">
                   <span
-                    className={
-                      (h.expectedReturn ?? 0) >= 0 ? "text-positive" : "text-negative"
-                    }
+                    className={(h.expectedReturn ?? 0) >= 0 ? "text-positive" : "text-negative"}
                   >
                     {pct(h.expectedReturn)}
                   </span>
@@ -120,8 +131,7 @@ function PreviousRunCard({ run }: { run: FactorBetaRow }) {
           ) : null}
           {run.hit_rate !== null ? (
             <span>
-              Hit rate{" "}
-              <span className="font-mono text-foreground">{run.hit_rate.toFixed(0)}%</span>
+              Hit rate <span className="font-mono text-foreground">{run.hit_rate.toFixed(0)}%</span>
             </span>
           ) : null}
           <span>
@@ -162,11 +172,273 @@ function PreviousRunCard({ run }: { run: FactorBetaRow }) {
   );
 }
 
+function MetricTile({
+  label,
+  value,
+  tone = "flat",
+}: {
+  label: string;
+  value: string;
+  tone?: "flat" | "signed" | "positive" | "negative";
+}) {
+  const toneClass =
+    tone === "positive"
+      ? "text-positive"
+      : tone === "negative"
+        ? "text-negative"
+        : tone === "signed"
+          ? "text-positive"
+          : "text-foreground";
+  return (
+    <div className="rounded-lg border border-border/70 bg-secondary/20 p-4">
+      <p className="label-caps">{label}</p>
+      <p
+        className={`mt-2 font-display text-2xl font-semibold tabular-nums tracking-tight ${toneClass}`}
+      >
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function PaperPortfolioPanels({
+  paper,
+  isPending,
+}: {
+  paper: PaperPortfolioSnapshot | undefined;
+  isPending: boolean;
+}) {
+  const strategyTone =
+    (paper?.strategy.returnPct ?? 0) >= 0 ? ("positive" as const) : ("negative" as const);
+  const vooTone = (paper?.voo.returnPct ?? 0) >= 0 ? ("positive" as const) : ("negative" as const);
+  const netTax = paper?.tax.netTaxable ?? 0;
+
+  return (
+    <>
+      <section className="panel p-6">
+        <div className="mb-2 flex flex-wrap items-center gap-2.5">
+          <Landmark className="size-4 text-accent" />
+          <h2 className="font-display text-base font-semibold tracking-tight">
+            Paper Strategy — ${WEEKLY_CONTRIBUTION_USD.toLocaleString()} Weekly DCA
+          </h2>
+          <span className="label-caps ml-auto">
+            {isPending
+              ? "Loading"
+              : paper?.live
+                ? `Catch-up from ${paper.inceptionDate ?? STRATEGY_INCEPTION_DATE} · ${paper.runCount} runs · as of ${paper.asOf}`
+                : "Awaiting model history"}
+          </span>
+        </div>
+        <p className="mb-5 max-w-3xl text-sm text-muted-foreground">
+          Catch-up replay starts with the {paper?.inceptionDate ?? STRATEGY_INCEPTION_DATE} model
+          run and continues through every later weekly run. Each run allocates $
+          {WEEKLY_CONTRIBUTION_USD.toLocaleString()} at the next session open using that week&apos;s
+          target weights (3-month tax-aware holds). The VOO sleeve invests the same cash on the same
+          dates.
+        </p>
+
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div>
+            <p className="label-caps mb-3">Factor strategy</p>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {isPending ? (
+                Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="h-24 animate-pulse rounded-lg bg-secondary/40" />
+                ))
+              ) : (
+                <>
+                  <MetricTile
+                    label="Cumulative return"
+                    value={pct(paper?.strategy.returnPct)}
+                    tone={strategyTone}
+                  />
+                  <MetricTile label="Portfolio value" value={usd(paper?.strategy.marketValue)} />
+                  <MetricTile label="Cost basis" value={usd(paper?.strategy.costBasis)} />
+                </>
+              )}
+            </div>
+          </div>
+          <div>
+            <p className="label-caps mb-3">VOO benchmark DCA</p>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {isPending ? (
+                Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="h-24 animate-pulse rounded-lg bg-secondary/40" />
+                ))
+              ) : (
+                <>
+                  <MetricTile
+                    label="Cumulative return"
+                    value={pct(paper?.voo.returnPct)}
+                    tone={vooTone}
+                  />
+                  <MetricTile label="Portfolio value" value={usd(paper?.voo.marketValue)} />
+                  <MetricTile label="Cost basis" value={usd(paper?.voo.costBasis)} />
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {!isPending && paper?.weeklySeries?.length ? (
+          <div className="mt-6 overflow-x-auto">
+            <p className="label-caps mb-3">Cumulative return by model run</p>
+            <table className="w-full min-w-[760px] text-sm">
+              <thead>
+                <tr className="border-b border-border text-left">
+                  <th className="label-caps py-2.5 pr-4">Run date</th>
+                  <th className="label-caps py-2.5 pr-4">Fill date</th>
+                  <th className="label-caps py-2.5 pr-4 text-right">Contributed</th>
+                  <th className="label-caps py-2.5 pr-4 text-right">Strategy value</th>
+                  <th className="label-caps py-2.5 pr-4 text-right">Strategy return</th>
+                  <th className="label-caps py-2.5 pr-4 text-right">VOO value</th>
+                  <th className="label-caps py-2.5 pr-4 text-right">VOO return</th>
+                  <th className="label-caps py-2.5 text-right">Alpha</th>
+                </tr>
+              </thead>
+              <tbody>
+                {paper.weeklySeries.map((row) => (
+                  <tr key={row.runDate} className="border-b border-border/50 last:border-0">
+                    <td className="py-2.5 pr-4 font-mono text-xs tabular-nums">{row.runDate}</td>
+                    <td className="py-2.5 pr-4 font-mono text-xs tabular-nums text-muted-foreground">
+                      {row.fillDate}
+                    </td>
+                    <td className="py-2.5 pr-4 text-right font-mono tabular-nums">
+                      {usd(row.contributed)}
+                    </td>
+                    <td className="py-2.5 pr-4 text-right font-mono tabular-nums">
+                      {usd(row.strategyValue)}
+                    </td>
+                    <td
+                      className={`py-2.5 pr-4 text-right font-mono tabular-nums ${
+                        row.strategyReturnPct >= 0 ? "text-positive" : "text-negative"
+                      }`}
+                    >
+                      {pct(row.strategyReturnPct)}
+                    </td>
+                    <td className="py-2.5 pr-4 text-right font-mono tabular-nums">
+                      {usd(row.vooValue)}
+                    </td>
+                    <td
+                      className={`py-2.5 pr-4 text-right font-mono tabular-nums ${
+                        row.vooReturnPct >= 0 ? "text-positive" : "text-negative"
+                      }`}
+                    >
+                      {pct(row.vooReturnPct)}
+                    </td>
+                    <td
+                      className={`py-2.5 text-right font-mono tabular-nums ${
+                        row.alphaPct >= 0 ? "text-positive" : "text-negative"
+                      }`}
+                    >
+                      {pct(row.alphaPct)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
+      </section>
+
+      <section className="panel p-6">
+        <div className="mb-5 flex flex-wrap items-center gap-2.5">
+          <Scale className="size-4 text-accent" />
+          <h2 className="font-display text-base font-semibold tracking-tight">Tax Lot Ledger</h2>
+          <span className="label-caps ml-auto">
+            {paper ? `${paper.openLots} open factor lots` : "—"}
+          </span>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          {isPending ? (
+            Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="h-24 animate-pulse rounded-lg bg-secondary/40" />
+            ))
+          ) : (
+            <>
+              <MetricTile
+                label="Cum. realized gains"
+                value={usd(paper?.tax.cumulativeRealizedGains)}
+                tone="positive"
+              />
+              <MetricTile
+                label="Cum. realized losses"
+                value={usd(paper?.tax.cumulativeRealizedLosses)}
+                tone="negative"
+              />
+              <MetricTile
+                label="Net taxable"
+                value={usd(netTax)}
+                tone={netTax >= 0 ? "positive" : "negative"}
+              />
+              <MetricTile
+                label="Cum. unrealized gains"
+                value={usd(paper?.tax.cumulativeUnrealizedGains)}
+                tone="positive"
+              />
+              <MetricTile
+                label="Cum. unrealized losses"
+                value={usd(paper?.tax.cumulativeUnrealizedLosses)}
+                tone="negative"
+              />
+            </>
+          )}
+        </div>
+        {!isPending && paper?.recentTrades?.length ? (
+          <div className="mt-6 overflow-x-auto">
+            <table className="w-full min-w-[640px] text-sm">
+              <thead>
+                <tr className="border-b border-border text-left">
+                  <th className="label-caps py-2.5 pr-4">Date</th>
+                  <th className="label-caps py-2.5 pr-4">Side</th>
+                  <th className="label-caps py-2.5 pr-4">Ticker</th>
+                  <th className="label-caps py-2.5 pr-4 text-right">Shares</th>
+                  <th className="label-caps py-2.5 pr-4 text-right">Price</th>
+                  <th className="label-caps py-2.5 text-right">Reason</th>
+                </tr>
+              </thead>
+              <tbody>
+                {paper.recentTrades.map((t, i) => (
+                  <tr
+                    key={`${t.date}-${t.ticker}-${i}`}
+                    className="border-b border-border/50 last:border-0"
+                  >
+                    <td className="py-2.5 pr-4 font-mono text-xs tabular-nums">{t.date}</td>
+                    <td className="py-2.5 pr-4 uppercase tracking-wide text-muted-foreground">
+                      {t.side}
+                    </td>
+                    <td className="py-2.5 pr-4 font-mono font-medium">{t.ticker}</td>
+                    <td className="py-2.5 pr-4 text-right font-mono tabular-nums">
+                      {t.shares.toFixed(3)}
+                    </td>
+                    <td className="py-2.5 pr-4 text-right font-mono tabular-nums">
+                      {usd(t.price, 2)}
+                    </td>
+                    <td className="py-2.5 text-right text-xs text-muted-foreground">{t.reason}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
+      </section>
+    </>
+  );
+}
+
 export function FactorBetaTab() {
   const { data, isPending } = useQuery({
     queryKey: ["factor-predictions"],
     queryFn: fetchFactorBetaData,
     staleTime: 5 * 60_000,
+  });
+
+  const fetchPaper = useServerFn(getPaperPortfolio);
+  const { data: paper, isPending: paperPending } = useQuery({
+    queryKey: ["paper-portfolio"],
+    queryFn: () => fetchPaper(),
+    staleTime: 10 * 60_000,
+    retry: 1,
   });
 
   const current = data?.current;
@@ -267,7 +539,7 @@ export function FactorBetaTab() {
         <div className="mb-5 flex flex-wrap items-center gap-2.5">
           <PieChart className="size-4 text-accent" />
           <h2 className="font-display text-base font-semibold tracking-tight">
-            10-ETF Factor Portfolio — 3-Month Hold
+            Factor Portfolio — 3-Month Hold
           </h2>
         </div>
 
@@ -277,7 +549,10 @@ export function FactorBetaTab() {
                 <div key={i} className="h-24 animate-pulse rounded-lg bg-secondary/40" />
               ))
             : stats.map((s) => (
-                <div key={s.label} className="rounded-lg border border-border/70 bg-secondary/20 p-4">
+                <div
+                  key={s.label}
+                  className="rounded-lg border border-border/70 bg-secondary/20 p-4"
+                >
                   <p className="label-caps">{s.label}</p>
                   <p
                     className={`mt-2 font-display text-2xl font-semibold tabular-nums tracking-tight ${
@@ -298,6 +573,8 @@ export function FactorBetaTab() {
           )}
         </div>
       </section>
+
+      <PaperPortfolioPanels paper={paper} isPending={paperPending} />
 
       <section className="panel p-6">
         <div className="mb-5 flex items-center gap-2.5">
