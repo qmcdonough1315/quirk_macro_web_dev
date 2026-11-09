@@ -1,8 +1,11 @@
 # ETF_Quant_Model sync payload
 
 Cursor could not push to `qmcdonough1315/ETF_Quant_Model` (403).
-Apply these files onto that repo's `main`, or apply:
+Copy these files onto that repository (preserving `modules/` paths), then open a PR.
 
-`git am /path/to/etf-quant-model-expand-optimizer.patch`
+Also included for the paper-trading / tax workstream:
+- `PAPER_PORTFOLIO.md` — strategy rules
+- `supabase_paper_portfolio.sql` — Supabase DDL (run once)
+- `modules/paper_portfolio.py` — weekly ledger step wired from `main.py`
 
-Then open a PR from branch `cursor/expand-etf-universe-optimizer-d7fa`.
+The Quirk Macro Factor tab already replays `$1000` weekly DCA + TLH from historical `portfolio_weights` via `src/lib/paper-portfolio.server.ts`, so the dashboard works before the model repo is updated.
