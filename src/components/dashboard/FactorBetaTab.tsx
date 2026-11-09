@@ -267,7 +267,7 @@ export function FactorBetaTab() {
         <div className="mb-5 flex flex-wrap items-center gap-2.5">
           <PieChart className="size-4 text-accent" />
           <h2 className="font-display text-base font-semibold tracking-tight">
-            10-ETF Factor Portfolio — 3-Month Hold
+            Factor Portfolio — 3-Month Hold
           </h2>
         </div>
 
