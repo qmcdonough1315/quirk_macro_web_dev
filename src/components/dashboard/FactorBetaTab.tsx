@@ -15,7 +15,7 @@ import {
 
 import { fetchFactorBetaData, type FactorBetaRow, type PortfolioHolding } from "@/lib/factor-beta";
 import { getPaperPortfolio, type PaperPortfolioSnapshot } from "@/lib/paper-portfolio.functions";
-import { WEEKLY_CONTRIBUTION_USD } from "@/lib/paper-portfolio-rules";
+import { STRATEGY_INCEPTION_DATE, WEEKLY_CONTRIBUTION_USD } from "@/lib/paper-portfolio-rules";
 import { RegimeRead } from "@/components/dashboard/RegimeRead";
 
 const pct = (n: number | null | undefined, digits = 2) =>
@@ -225,14 +225,16 @@ function PaperPortfolioPanels({
             {isPending
               ? "Loading"
               : paper?.live
-                ? `Simulated · ${paper.runCount} runs · as of ${paper.asOf}`
+                ? `Catch-up from ${paper.inceptionDate ?? STRATEGY_INCEPTION_DATE} · ${paper.runCount} runs · as of ${paper.asOf}`
                 : "Awaiting model history"}
           </span>
         </div>
         <p className="mb-5 max-w-3xl text-sm text-muted-foreground">
-          Each model run allocates ${WEEKLY_CONTRIBUTION_USD.toLocaleString()} at the next session
-          open using that week&apos;s target weights, held at least three months with tax-aware
-          exits. The VOO sleeve invests the same cash on the same dates for comparison.
+          Catch-up replay starts with the {paper?.inceptionDate ?? STRATEGY_INCEPTION_DATE} model
+          run and continues through every later weekly run. Each run allocates $
+          {WEEKLY_CONTRIBUTION_USD.toLocaleString()} at the next session open using that week&apos;s
+          target weights (3-month tax-aware holds). The VOO sleeve invests the same cash on the same
+          dates.
         </p>
 
         <div className="grid gap-4 lg:grid-cols-2">
@@ -277,6 +279,66 @@ function PaperPortfolioPanels({
             </div>
           </div>
         </div>
+
+        {!isPending && paper?.weeklySeries?.length ? (
+          <div className="mt-6 overflow-x-auto">
+            <p className="label-caps mb-3">Cumulative return by model run</p>
+            <table className="w-full min-w-[760px] text-sm">
+              <thead>
+                <tr className="border-b border-border text-left">
+                  <th className="label-caps py-2.5 pr-4">Run date</th>
+                  <th className="label-caps py-2.5 pr-4">Fill date</th>
+                  <th className="label-caps py-2.5 pr-4 text-right">Contributed</th>
+                  <th className="label-caps py-2.5 pr-4 text-right">Strategy value</th>
+                  <th className="label-caps py-2.5 pr-4 text-right">Strategy return</th>
+                  <th className="label-caps py-2.5 pr-4 text-right">VOO value</th>
+                  <th className="label-caps py-2.5 pr-4 text-right">VOO return</th>
+                  <th className="label-caps py-2.5 text-right">Alpha</th>
+                </tr>
+              </thead>
+              <tbody>
+                {paper.weeklySeries.map((row) => (
+                  <tr key={row.runDate} className="border-b border-border/50 last:border-0">
+                    <td className="py-2.5 pr-4 font-mono text-xs tabular-nums">{row.runDate}</td>
+                    <td className="py-2.5 pr-4 font-mono text-xs tabular-nums text-muted-foreground">
+                      {row.fillDate}
+                    </td>
+                    <td className="py-2.5 pr-4 text-right font-mono tabular-nums">
+                      {usd(row.contributed)}
+                    </td>
+                    <td className="py-2.5 pr-4 text-right font-mono tabular-nums">
+                      {usd(row.strategyValue)}
+                    </td>
+                    <td
+                      className={`py-2.5 pr-4 text-right font-mono tabular-nums ${
+                        row.strategyReturnPct >= 0 ? "text-positive" : "text-negative"
+                      }`}
+                    >
+                      {pct(row.strategyReturnPct)}
+                    </td>
+                    <td className="py-2.5 pr-4 text-right font-mono tabular-nums">
+                      {usd(row.vooValue)}
+                    </td>
+                    <td
+                      className={`py-2.5 pr-4 text-right font-mono tabular-nums ${
+                        row.vooReturnPct >= 0 ? "text-positive" : "text-negative"
+                      }`}
+                    >
+                      {pct(row.vooReturnPct)}
+                    </td>
+                    <td
+                      className={`py-2.5 text-right font-mono tabular-nums ${
+                        row.alphaPct >= 0 ? "text-positive" : "text-negative"
+                      }`}
+                    >
+                      {pct(row.alphaPct)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
       </section>
 
       <section className="panel p-6">

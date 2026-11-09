@@ -4,10 +4,12 @@
 Simulate (and later execute) a weekly paper account that dollar-cost averages **$1,000** into each Sunday model run’s target weights, while applying a tax-aware exit policy and wash-sale-safe tax-loss harvesting (TLH).
 
 ## Capital schedule
-- On each model `execution_date`, schedule fills for the **next business-day open**.
+- **Inception / catch-up start:** `2026-09-20` model run (inclusive). Earlier runs are ignored.
+- On each model `execution_date` on/after inception, schedule fills for the **next business-day open**.
 - Deploy **$1,000** across that run’s `Target_Weight` vector (fractional shares allowed).
 - In parallel, deploy **$1,000** into **VOO** on the same fill date (benchmark sleeve).
 - Track lot-level cost basis, open/close dates, and mark-to-market value.
+- The Factor tab shows a week-by-week cumulative return table from inception through the latest run.
 
 ## Holding & exit policy (factor sleeve only)
 Lots are evaluated once they clear a **~3-month / 91-day** minimum hold:

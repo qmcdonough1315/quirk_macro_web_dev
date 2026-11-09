@@ -8,6 +8,8 @@ export const MIN_HOLD_DAYS = 91; // ~3 months calendar
 export const LONG_TERM_DAYS = 365;
 export const WASH_SALE_DAYS = 30;
 export const WEIGHT_EPS = 1e-4;
+/** Paper strategy catch-up inception (inclusive model-run date). */
+export const STRATEGY_INCEPTION_DATE = "2026-09-20";
 
 /** Tickers treated as substantially identical for wash-sale avoidance. */
 export const SUBSTANTIALLY_IDENTICAL: Record<string, string[]> = {

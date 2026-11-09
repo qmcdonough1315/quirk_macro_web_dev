@@ -14,6 +14,7 @@ import {
   ETF_CATEGORY_PEERS,
   LONG_TERM_DAYS,
   MIN_HOLD_DAYS,
+  STRATEGY_INCEPTION_DATE,
   WASH_SALE_DAYS,
   WEEKLY_CONTRIBUTION_USD,
   WEIGHT_EPS,
@@ -23,8 +24,22 @@ import {
   nextBusinessDayAfter,
 } from "./paper-portfolio-rules";
 
+export interface PaperWeeklyPoint {
+  runDate: string;
+  fillDate: string;
+  contributed: number;
+  strategyValue: number;
+  strategyCostBasis: number;
+  strategyReturnPct: number;
+  vooValue: number;
+  vooCostBasis: number;
+  vooReturnPct: number;
+  alphaPct: number;
+}
+
 export interface PaperPortfolioSnapshot {
   asOf: string;
+  inceptionDate: string;
   live: boolean;
   runCount: number;
   totalContributed: number;
@@ -49,6 +64,7 @@ export interface PaperPortfolioSnapshot {
   };
   openLots: number;
   recentTrades: PaperTrade[];
+  weeklySeries: PaperWeeklyPoint[];
   notes: string[];
 }
 
@@ -209,10 +225,14 @@ async function loadHistoricalWeights(): Promise<{ date: string; weights: WeightM
     byDate.set(date, bucket);
   }
 
-  return Array.from(byDate.entries())
-    .sort((a, b) => (a[0] < b[0] ? -1 : 1))
-    .map(([date, weights]) => ({ date, weights: normalizeWeights(weights) }))
-    .filter((r) => Object.keys(r.weights).length > 0);
+  return (
+    Array.from(byDate.entries())
+      .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+      .map(([date, weights]) => ({ date, weights: normalizeWeights(weights) }))
+      .filter((r) => Object.keys(r.weights).length > 0)
+      // Catch-up starts with the 9/20/2026 model run and continues forward.
+      .filter((r) => r.date >= STRATEGY_INCEPTION_DATE)
+  );
 }
 
 function availableLossOffset(state: SimState): number {
@@ -425,12 +445,11 @@ function deployContribution(
   }
 }
 
-function summarize(
+function markToMarket(
   state: SimState,
   asOf: string,
-  runCount: number,
   prices: Map<string, Map<string, { open: number; close: number }>>,
-): PaperPortfolioSnapshot {
+) {
   let stratMv = state.cashFactor;
   let stratCost = 0;
   let vooMv = state.cashVoo;
@@ -456,62 +475,87 @@ function summarize(
     }
   }
 
+  return {
+    stratMv,
+    stratCost: stratCost + state.cashFactor,
+    vooMv,
+    vooCost: vooCost + state.cashVoo,
+    uGain,
+    uLoss,
+  };
+}
+
+function summarize(
+  state: SimState,
+  asOf: string,
+  runCount: number,
+  prices: Map<string, Map<string, { open: number; close: number }>>,
+  weeklySeries: PaperWeeklyPoint[],
+): PaperPortfolioSnapshot {
+  const mtm = markToMarket(state, asOf, prices);
   const totalContributed = runCount * WEEKLY_CONTRIBUTION_USD;
-  // Cost basis = open-lot purchase cost + uninvested cash in the sleeve.
-  const strategyCostBasis = stratCost + state.cashFactor;
-  const vooCostBasis = vooCost + state.cashVoo;
 
   return {
     asOf,
+    inceptionDate: STRATEGY_INCEPTION_DATE,
     live: true,
     runCount,
     totalContributed,
     strategy: {
-      marketValue: stratMv,
-      costBasis: strategyCostBasis,
-      returnPct: totalContributed > 0 ? (stratMv / totalContributed - 1) * 100 : 0,
+      marketValue: mtm.stratMv,
+      costBasis: mtm.stratCost,
+      returnPct: totalContributed > 0 ? (mtm.stratMv / totalContributed - 1) * 100 : 0,
       cash: state.cashFactor,
     },
     voo: {
-      marketValue: vooMv,
-      costBasis: vooCostBasis,
-      returnPct: totalContributed > 0 ? (vooMv / totalContributed - 1) * 100 : 0,
+      marketValue: mtm.vooMv,
+      costBasis: mtm.vooCost,
+      returnPct: totalContributed > 0 ? (mtm.vooMv / totalContributed - 1) * 100 : 0,
       cash: state.cashVoo,
     },
     tax: {
       cumulativeRealizedGains: state.cumRealizedGains,
       cumulativeRealizedLosses: state.cumRealizedLosses,
       netTaxable: state.cumRealizedGains - state.cumRealizedLosses,
-      cumulativeUnrealizedGains: uGain,
-      cumulativeUnrealizedLosses: uLoss,
+      cumulativeUnrealizedGains: mtm.uGain,
+      cumulativeUnrealizedLosses: mtm.uLoss,
     },
     openLots: state.lots.filter((l) => l.strategy === "factor").length,
     recentTrades: state.trades.slice(-12).reverse(),
+    weeklySeries,
     notes: state.notes.slice(-8),
+  };
+}
+
+function emptySnapshot(notes: string[]): PaperPortfolioSnapshot {
+  return {
+    asOf: new Date().toISOString().slice(0, 10),
+    inceptionDate: STRATEGY_INCEPTION_DATE,
+    live: false,
+    runCount: 0,
+    totalContributed: 0,
+    strategy: { marketValue: 0, costBasis: 0, returnPct: 0, cash: 0 },
+    voo: { marketValue: 0, costBasis: 0, returnPct: 0, cash: 0 },
+    tax: {
+      cumulativeRealizedGains: 0,
+      cumulativeRealizedLosses: 0,
+      netTaxable: 0,
+      cumulativeUnrealizedGains: 0,
+      cumulativeUnrealizedLosses: 0,
+    },
+    openLots: 0,
+    recentTrades: [],
+    weeklySeries: [],
+    notes,
   };
 }
 
 export async function simulatePaperPortfolio(): Promise<PaperPortfolioSnapshot> {
   const history = await loadHistoricalWeights();
   if (!history.length) {
-    return {
-      asOf: new Date().toISOString().slice(0, 10),
-      live: false,
-      runCount: 0,
-      totalContributed: 0,
-      strategy: { marketValue: 0, costBasis: 0, returnPct: 0, cash: 0 },
-      voo: { marketValue: 0, costBasis: 0, returnPct: 0, cash: 0 },
-      tax: {
-        cumulativeRealizedGains: 0,
-        cumulativeRealizedLosses: 0,
-        netTaxable: 0,
-        cumulativeUnrealizedGains: 0,
-        cumulativeUnrealizedLosses: 0,
-      },
-      openLots: 0,
-      recentTrades: [],
-      notes: ["No historical portfolio_weights rows found in factor_predictions."],
-    };
+    return emptySnapshot([
+      `No portfolio_weights rows on/after ${STRATEGY_INCEPTION_DATE} in factor_predictions.`,
+    ]);
   }
 
   const tickers = new Set<string>(["VOO"]);
@@ -535,10 +579,13 @@ export async function simulatePaperPortfolio(): Promise<PaperPortfolioSnapshot> 
     cumRealizedLosses: 0,
     cashFactor: 0,
     cashVoo: 0,
-    notes: [],
+    notes: [`Catch-up replay from model inception ${STRATEGY_INCEPTION_DATE} through ${end}.`],
   };
 
-  for (const run of history) {
+  const weeklySeries: PaperWeeklyPoint[] = [];
+
+  for (let i = 0; i < history.length; i++) {
+    const run = history[i]!;
     const fillDate = nextBusinessDayAfter(run.date);
     // Drop expired wash-sale restrictions.
     for (const [ticker, soldOn] of [...state.wash.entries()]) {
@@ -546,7 +593,24 @@ export async function simulatePaperPortfolio(): Promise<PaperPortfolioSnapshot> 
     }
     evaluateExits(state, fillDate, run.weights, prices);
     deployContribution(state, run.date, fillDate, run.weights, prices);
+
+    const contributed = (i + 1) * WEEKLY_CONTRIBUTION_USD;
+    const mtm = markToMarket(state, fillDate, prices);
+    const strategyReturnPct = contributed > 0 ? (mtm.stratMv / contributed - 1) * 100 : 0;
+    const vooReturnPct = contributed > 0 ? (mtm.vooMv / contributed - 1) * 100 : 0;
+    weeklySeries.push({
+      runDate: run.date,
+      fillDate,
+      contributed,
+      strategyValue: mtm.stratMv,
+      strategyCostBasis: mtm.stratCost,
+      strategyReturnPct,
+      vooValue: mtm.vooMv,
+      vooCostBasis: mtm.vooCost,
+      vooReturnPct,
+      alphaPct: strategyReturnPct - vooReturnPct,
+    });
   }
 
-  return summarize(state, end, history.length, prices);
+  return summarize(state, end, history.length, prices, weeklySeries);
 }

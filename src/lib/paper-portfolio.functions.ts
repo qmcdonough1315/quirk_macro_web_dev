@@ -1,8 +1,13 @@
 import { createServerFn } from "@tanstack/react-start";
 
-import { simulatePaperPortfolio, type PaperPortfolioSnapshot } from "./paper-portfolio.server";
+import {
+  simulatePaperPortfolio,
+  type PaperPortfolioSnapshot,
+  type PaperWeeklyPoint,
+} from "./paper-portfolio.server";
+import { STRATEGY_INCEPTION_DATE } from "./paper-portfolio-rules";
 
-export type { PaperPortfolioSnapshot };
+export type { PaperPortfolioSnapshot, PaperWeeklyPoint };
 
 export const getPaperPortfolio = createServerFn({ method: "GET" }).handler(
   async (): Promise<PaperPortfolioSnapshot> => {
@@ -12,6 +17,7 @@ export const getPaperPortfolio = createServerFn({ method: "GET" }).handler(
       const message = err instanceof Error ? err.message : "Paper portfolio simulation failed";
       return {
         asOf: new Date().toISOString().slice(0, 10),
+        inceptionDate: STRATEGY_INCEPTION_DATE,
         live: false,
         runCount: 0,
         totalContributed: 0,
@@ -26,6 +32,7 @@ export const getPaperPortfolio = createServerFn({ method: "GET" }).handler(
         },
         openLots: 0,
         recentTrades: [],
+        weeklySeries: [],
         notes: [message],
       };
     }
