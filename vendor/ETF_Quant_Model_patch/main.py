@@ -73,10 +73,13 @@ def main():
         portfolio_sharpe=port_sharpe,
     )
 
-    # 5. Paper DCA + tax-aware ledger (summary export; full history replayed on site)
+    # 5. Paper DCA + tax-aware ledger (TLH substitutes via beta-distance)
     if run_paper_portfolio_step is not None and not top_picks.empty:
         print("--- PAPER PORTFOLIO STEP ---")
-        summary = run_paper_portfolio_step(top_picks)
+        summary = run_paper_portfolio_step(
+            top_picks,
+            beta_profiles=beta_profiles,
+        )
         if summary:
             print(f"  • Strategy value : ${summary.get('strategy_value', 0):,.2f}")
             print(f"  • VOO value      : ${summary.get('voo_value', 0):,.2f}")

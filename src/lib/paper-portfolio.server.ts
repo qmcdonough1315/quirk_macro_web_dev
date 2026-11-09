@@ -3,13 +3,19 @@
  *
  * Each model run date:
  *   1) Evaluate lots that have cleared the 3-month minimum hold
- *   2) Tax-loss harvest (with factor-peer substitutes to avoid wash sales)
+ *   2) Tax-loss harvest (beta-distance substitutes to avoid wash sales)
  *   3) Hold short-term winners for LTCG unless harvested losses can offset
  *   4) Dollar-cost average $1000 into the new target weights at next-session open
  *   5) Dollar-cost average $1000 into VOO on the same fill date (benchmark)
  */
 
 import { supabase } from "./supabase";
+import {
+  buildBetaCache,
+  chooseBetaDistanceSubstitute,
+  FACTOR_PROXY_TICKERS,
+  type BetaVector,
+} from "./paper-portfolio-betas";
 import {
   ETF_CATEGORY_PEERS,
   LONG_TERM_DAYS,
@@ -276,30 +282,73 @@ function isWashRestricted(state: SimState, ticker: string, asOf: string): boolea
   return false;
 }
 
+function substituteCandidateUniverse(soldTicker: string, prices: PriceMapLike): string[] {
+  const out = new Set<string>();
+  const category = categoryForTicker(soldTicker);
+  for (const peer of category ? (ETF_CATEGORY_PEERS[category] ?? []) : []) out.add(peer);
+  // Broaden search to every priced ETF we already downloaded.
+  for (const ticker of prices.keys()) out.add(ticker);
+  out.delete(soldTicker);
+  return [...out];
+}
+
+type PriceMapLike = Map<string, Map<string, { open: number; close: number }>>;
+
 function chooseSubstitute(
   soldTicker: string,
   asOf: string,
   state: SimState,
-  prices: Map<string, Map<string, { open: number; close: number }>>,
+  prices: PriceMapLike,
   currentWeights: WeightMap,
+  betas: Map<string, BetaVector>,
 ): string | null {
-  const category = categoryForTicker(soldTicker);
-  const peers = category ? (ETF_CATEGORY_PEERS[category] ?? []) : [];
   const banned = identicalSet(soldTicker);
-  for (const peer of peers) {
-    if (banned.has(peer)) continue;
-    if (peer === soldTicker) continue;
-    if (isWashRestricted(state, peer, asOf)) continue;
-    // Prefer names the live model is not already maxing, but allow any priced peer.
-    if (priceOnOrBefore(prices.get(peer), asOf, "open") == null) continue;
-    if ((currentWeights[peer] ?? 0) > 0.11) continue;
-    return peer;
+  const candidates = substituteCandidateUniverse(soldTicker, prices);
+
+  const pick = chooseBetaDistanceSubstitute({
+    soldTicker,
+    candidates,
+    betas,
+    isEligible: (ticker) => {
+      if (banned.has(ticker)) return false;
+      if (isWashRestricted(state, ticker, asOf)) return false;
+      if (priceOnOrBefore(prices.get(ticker), asOf, "open") == null) return false;
+      // Soft-skip names already near the single-name cap in the live target book.
+      if ((currentWeights[ticker] ?? 0) > 0.11) return false;
+      return true;
+    },
+  });
+  if (pick) {
+    state.notes.push(
+      `TLH beta-distance: ${soldTicker} → ${pick.ticker} (d=${pick.distance.toFixed(3)})`,
+    );
+    return pick.ticker;
   }
-  // Fallback: any priced peer ignoring the 11% soft skip.
-  for (const peer of peers) {
-    if (banned.has(peer)) continue;
+
+  // Fallback: nearest beta ignoring the 11% soft skip, then category peer order.
+  const relaxed = chooseBetaDistanceSubstitute({
+    soldTicker,
+    candidates,
+    betas,
+    isEligible: (ticker) => {
+      if (banned.has(ticker)) return false;
+      if (isWashRestricted(state, ticker, asOf)) return false;
+      return priceOnOrBefore(prices.get(ticker), asOf, "open") != null;
+    },
+  });
+  if (relaxed) {
+    state.notes.push(
+      `TLH beta-distance (relaxed): ${soldTicker} → ${relaxed.ticker} (d=${relaxed.distance.toFixed(3)})`,
+    );
+    return relaxed.ticker;
+  }
+
+  const category = categoryForTicker(soldTicker);
+  for (const peer of category ? (ETF_CATEGORY_PEERS[category] ?? []) : []) {
+    if (banned.has(peer) || peer === soldTicker) continue;
     if (isWashRestricted(state, peer, asOf)) continue;
     if (priceOnOrBefore(prices.get(peer), asOf, "open") == null) continue;
+    state.notes.push(`TLH category fallback: ${soldTicker} → ${peer}`);
     return peer;
   }
   return null;
@@ -345,6 +394,7 @@ function evaluateExits(
   asOf: string,
   currentWeights: WeightMap,
   prices: Map<string, Map<string, { open: number; close: number }>>,
+  betas: Map<string, BetaVector>,
 ) {
   const candidates = state.lots.filter(
     (lot) => lot.strategy === "factor" && diffDays(lot.openedOn, asOf) >= MIN_HOLD_DAYS,
@@ -364,8 +414,8 @@ function evaluateExits(
         recordSale(state, lot, asOf, px, "tlh_exit_no_allocation");
         continue;
       }
-      // Still want the factor/sleeve exposure: harvest and rotate into a peer.
-      const sub = chooseSubstitute(lot.ticker, asOf, state, prices, currentWeights);
+      // Still want the factor exposure: harvest and rotate to nearest beta peer.
+      const sub = chooseSubstitute(lot.ticker, asOf, state, prices, currentWeights, betas);
       const proceeds = recordSale(state, lot, asOf, px, "tlh_rotate");
       if (sub) {
         const subPx = priceOnOrBefore(prices.get(sub), asOf, "open");
@@ -558,17 +608,23 @@ export async function simulatePaperPortfolio(): Promise<PaperPortfolioSnapshot> 
     ]);
   }
 
-  const tickers = new Set<string>(["VOO"]);
+  const tickers = new Set<string>(["VOO", ...FACTOR_PROXY_TICKERS]);
   for (const run of history) {
     for (const t of Object.keys(run.weights)) tickers.add(t);
     for (const peers of Object.values(ETF_CATEGORY_PEERS)) {
-      for (const p of peers.slice(0, 6)) tickers.add(p);
+      for (const p of peers) tickers.add(p);
     }
   }
 
   const start = history[0]!.date;
   const end = new Date().toISOString().slice(0, 10);
-  const prices = await fetchYahooOpens([...tickers], start, end);
+  // Extra history before inception so beta OLS has a full lookback window.
+  const betaWarmStart = "2025-01-01";
+  const prices = await fetchYahooOpens(
+    [...tickers],
+    betaWarmStart < start ? betaWarmStart : start,
+    end,
+  );
 
   const state: SimState = {
     lots: [],
@@ -579,10 +635,15 @@ export async function simulatePaperPortfolio(): Promise<PaperPortfolioSnapshot> 
     cumRealizedLosses: 0,
     cashFactor: 0,
     cashVoo: 0,
-    notes: [`Catch-up replay from model inception ${STRATEGY_INCEPTION_DATE} through ${end}.`],
+    notes: [
+      `Catch-up replay from model inception ${STRATEGY_INCEPTION_DATE} through ${end}.`,
+      "TLH substitutes ranked by Euclidean distance in estimated factor-beta space.",
+    ],
   };
 
   const weeklySeries: PaperWeeklyPoint[] = [];
+  let betaCache = new Map<string, BetaVector>();
+  let betaCacheAsOf = "";
 
   for (let i = 0; i < history.length; i++) {
     const run = history[i]!;
@@ -591,7 +652,18 @@ export async function simulatePaperPortfolio(): Promise<PaperPortfolioSnapshot> 
     for (const [ticker, soldOn] of [...state.wash.entries()]) {
       if (diffDays(soldOn, fillDate) >= WASH_SALE_DAYS) state.wash.delete(ticker);
     }
-    evaluateExits(state, fillDate, run.weights, prices);
+    if (betaCacheAsOf !== fillDate) {
+      const held = state.lots.map((l) => l.ticker);
+      const weighted = Object.keys(run.weights);
+      const peerPool = Object.values(ETF_CATEGORY_PEERS).flat();
+      betaCache = buildBetaCache(
+        [...new Set([...held, ...weighted, ...peerPool, ...FACTOR_PROXY_TICKERS])],
+        prices,
+        fillDate,
+      );
+      betaCacheAsOf = fillDate;
+    }
+    evaluateExits(state, fillDate, run.weights, prices, betaCache);
     deployContribution(state, run.date, fillDate, run.weights, prices);
 
     const contributed = (i + 1) * WEEKLY_CONTRIBUTION_USD;
