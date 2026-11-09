@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { Activity, ChevronDown, Home, Wallet } from "lucide-react";
+import { Activity, ChevronDown } from "lucide-react";
 
 import { MacroTab } from "@/components/dashboard/MacroTab";
 import { HousingTab } from "@/components/dashboard/HousingTab";
@@ -43,28 +43,19 @@ interface SubTab {
 interface NavGroup {
   id: string;
   label: string;
-  icon?: typeof Home;
   subtabs: SubTab[];
 }
 
 const nav: (NavGroup | SubTab)[] = [
+  { id: "factors", label: "Wealth Management" },
+  { id: "cash", label: "Cash Engine" },
   { id: "macros", label: "Get Your Macros" },
   {
     id: "housing-group",
-    label: "Housing",
-    icon: Home,
+    label: "Housing Market Explorer",
     subtabs: [
-      { id: "housing", label: "Housing Data" },
       { id: "local", label: "Local Market Explorer" },
-    ],
-  },
-  {
-    id: "wealth-group",
-    label: "Wealth Management",
-    icon: Wallet,
-    subtabs: [
-      { id: "factors", label: "ETF Model" },
-      { id: "cash", label: "Cash Management" },
+      { id: "housing", label: "Housing Data" },
     ],
   },
   { id: "about", label: "About" },
@@ -73,7 +64,7 @@ const nav: (NavGroup | SubTab)[] = [
 const isGroup = (item: NavGroup | SubTab): item is NavGroup => "subtabs" in item;
 
 function Dashboard() {
-  const [tab, setTab] = useState<SubTabId>("macros");
+  const [tab, setTab] = useState<SubTabId>("factors");
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const navRef = useRef<HTMLElement>(null);
 
@@ -140,7 +131,10 @@ function Dashboard() {
                     type="button"
                     aria-haspopup="true"
                     aria-expanded={openGroup === item.id}
-                    onClick={() => setOpenGroup(openGroup === item.id ? null : item.id)}
+                    onClick={() => {
+                      if (!item.subtabs.some((s) => s.id === tab)) setTab(item.subtabs[0].id);
+                      setOpenGroup(openGroup === item.id ? null : item.id);
+                    }}
                     className={`-mb-px flex items-center gap-1.5 whitespace-nowrap border-b-2 px-4 py-3 font-display text-sm font-medium tracking-tight transition-colors ${
                       activeGroup?.id === item.id
                         ? "border-accent text-foreground"
