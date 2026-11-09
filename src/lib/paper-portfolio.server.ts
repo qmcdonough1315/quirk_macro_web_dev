@@ -22,6 +22,7 @@ import {
   diffDays,
   identicalSet,
   nextBusinessDayAfter,
+  taxLedgerTrades,
 } from "./paper-portfolio-rules";
 
 export interface PaperWeeklyPoint {
@@ -521,7 +522,7 @@ function summarize(
       cumulativeUnrealizedLosses: mtm.uLoss,
     },
     openLots: state.lots.filter((l) => l.strategy === "factor").length,
-    recentTrades: state.trades.slice(-12).reverse(),
+    recentTrades: taxLedgerTrades(state.trades),
     weeklySeries,
     notes: state.notes.slice(-8),
   };

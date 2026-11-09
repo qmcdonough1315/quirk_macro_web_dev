@@ -15,7 +15,11 @@ import {
 
 import { fetchFactorBetaData, type FactorBetaRow, type PortfolioHolding } from "@/lib/factor-beta";
 import { getPaperPortfolio, type PaperPortfolioSnapshot } from "@/lib/paper-portfolio.functions";
-import { STRATEGY_INCEPTION_DATE, WEEKLY_CONTRIBUTION_USD } from "@/lib/paper-portfolio-rules";
+import {
+  STRATEGY_INCEPTION_DATE,
+  WEEKLY_CONTRIBUTION_USD,
+  taxLedgerTrades,
+} from "@/lib/paper-portfolio-rules";
 import { RegimeRead } from "@/components/dashboard/RegimeRead";
 
 const pct = (n: number | null | undefined, digits = 2) =>
@@ -212,6 +216,7 @@ function PaperPortfolioPanels({
     (paper?.strategy.returnPct ?? 0) >= 0 ? ("positive" as const) : ("negative" as const);
   const vooTone = (paper?.voo.returnPct ?? 0) >= 0 ? ("positive" as const) : ("negative" as const);
   const netTax = paper?.tax.netTaxable ?? 0;
+  const ledgerTrades = taxLedgerTrades(paper?.recentTrades ?? []);
 
   return (
     <>
@@ -384,7 +389,7 @@ function PaperPortfolioPanels({
             </>
           )}
         </div>
-        {!isPending && paper?.recentTrades?.length ? (
+        {!isPending && ledgerTrades.length ? (
           <div className="mt-6 overflow-x-auto">
             <table className="w-full min-w-[640px] text-sm">
               <thead>
@@ -398,7 +403,7 @@ function PaperPortfolioPanels({
                 </tr>
               </thead>
               <tbody>
-                {paper.recentTrades.map((t, i) => (
+                {ledgerTrades.map((t, i) => (
                   <tr
                     key={`${t.date}-${t.ticker}-${i}`}
                     className="border-b border-border/50 last:border-0"
