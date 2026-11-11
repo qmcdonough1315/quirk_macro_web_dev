@@ -11,12 +11,12 @@ import {
   Waves,
 } from "lucide-react";
 
+import { getAlpacaPaperLedger } from "@/lib/alpaca.functions";
 import { fetchCashManagerYields } from "@/lib/cash-manager";
 import {
   CASH_MARGIN_RESERVE_USD,
   DCA_WEEKS,
   ETF_TARGET_CAPITAL_USD,
-  OPTIONS_BP_USED_USD,
   OPTIONS_PAPER_CAPITAL_USD,
   TOTAL_PAPER_BOOK_USD,
   WEEKLY_CONTRIBUTION_USD,
@@ -123,14 +123,31 @@ export function SummaryTab() {
     queryFn: fetchCashManagerYields,
     staleTime: 30 * 60_000,
   });
+  const fetchAlpaca = useServerFn(getAlpacaPaperLedger);
+  const alpaca = useQuery({
+    queryKey: ["alpaca-paper-ledger"],
+    queryFn: () => fetchAlpaca(),
+    staleTime: 60_000,
+    retry: 1,
+  });
 
   const snap = paper.data as PaperPortfolioSnapshot | undefined;
   const loading = paper.isPending;
   const runCount = snap?.runCount ?? 0;
   const etfFloat = snap?.etfFloatRemaining ?? ETF_TARGET_CAPITAL_USD;
+  const alpacaLive = Boolean(alpaca.data?.live);
+  const optionsBp = alpaca.data?.account?.optionsBuyingPower ?? null;
+  const optionsBpUsed =
+    alpacaLive && optionsBp != null
+      ? Math.max(0, OPTIONS_PAPER_CAPITAL_USD - Math.min(OPTIONS_PAPER_CAPITAL_USD, optionsBp))
+      : 0;
+  const optionUnrealized = (alpaca.data?.optionPositions ?? []).reduce(
+    (s, p) => s + p.unrealizedPl,
+    0,
+  );
   const partitions = cashPartitions({
     etfFloatRemaining: etfFloat,
-    optionsBpUsed: OPTIONS_BP_USED_USD,
+    optionsBpUsed,
   });
 
   const contributions =
@@ -165,10 +182,11 @@ export function SummaryTab() {
   const etfRealized = snap?.tax.factor.netRealized ?? null;
   const etfReturn = snap?.strategy.returnPct ?? null;
 
-  // Book NAV: ETF MV + cash reserve + ETF float + options capital sitting in cash (no live options MTM yet).
-  // Do not double-count options capital as a separate invested asset beyond cash.
-  const bookNav =
-    (etfMv ?? 0) + CASH_MARGIN_RESERVE_USD + etfFloat + OPTIONS_PAPER_CAPITAL_USD;
+  // Prefer Alpaca equity when live; otherwise modeled ETF + cash sleeves.
+  // Do not double-count options capital as a separate invested asset beyond cash/Alpaca equity.
+  const bookNav = alpacaLive && alpaca.data?.account
+    ? alpaca.data.account.equity
+    : (etfMv ?? 0) + CASH_MARGIN_RESERVE_USD + etfFloat + OPTIONS_PAPER_CAPITAL_USD;
   const deployedEtf = snap?.totalContributed ?? 0;
   const topYield = yields.data?.funds[0];
   const avgYield = yields.data?.summary?.avg_yield ?? topYield?.sec_yield_30d ?? null;
@@ -195,14 +213,16 @@ export function SummaryTab() {
           <span className="label-caps ml-auto">
             {loading
               ? "Loading"
-              : snap?.live
-                ? `${runCount} ETF runs · since ${since}`
-                : "Awaiting ETF history"}
+              : [
+                  snap?.live ? `${runCount} ETF runs · since ${since}` : "Awaiting ETF history",
+                  alpacaLive ? "Alpaca paper live" : "Alpaca awaiting secrets",
+                ].join(" · ")}
           </span>
         </div>
         <p className="mb-5 max-w-3xl text-sm text-muted-foreground">
-          Consolidated view of the ETF model, options book, and cash reserve. Detail tables live on
-          sleeve tabs — this page reconciles capital, tax posture, and collateral.
+          Consolidated view of the ETF model, options book, and cash reserve. When Alpaca paper is
+          connected, Book NAV uses Alpaca equity; ETF sleeve metrics still come from the factor DCA
+          ledger. Detail tables live on sleeve tabs.
         </p>
 
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -279,21 +299,58 @@ export function SummaryTab() {
         </SleeveCard>
 
         <SleeveCard icon={Waves} title="Options Book · $25k" onOpen={() => go("options")}>
-          <Metric label="Buying power used" value={usd(OPTIONS_BP_USED_USD)} note="Not live" tone="muted" />
+          {alpacaLive ? (
+            <Metric
+              label="Options BP (Alpaca)"
+              value={usd(optionsBp)}
+              note="From paper account"
+            />
+          ) : (
+            <Metric
+              label="Options BP (Alpaca)"
+              value="Not live"
+              note="Add Alpaca secrets"
+              tone="muted"
+            />
+          )}
           <Metric
             label="Margin headroom"
             value={usd(partitions.freeCollateralUsd)}
-            note="Cash reserve − BP used"
+            note="Cash reserve − modeled BP used"
             tone="positive"
           />
-          <Metric label="Open P&L" value="Not live" tone="muted" note="Phase 1 · rules only" />
-          <Metric
-            label="Realized premium"
-            value="Not live"
-            tone="muted"
-            note="Awaiting options ledger"
-          />
-          <Metric label="β-weighted delta" value="Not live" tone="muted" />
+          {alpacaLive ? (
+            <Metric
+              label="Open options P&L"
+              value={usd(optionUnrealized, 2)}
+              note={`${alpaca.data?.optionPositions.length ?? 0} option positions`}
+              tone={optionUnrealized >= 0 ? "positive" : "negative"}
+            />
+          ) : (
+            <Metric
+              label="Open options P&L"
+              value="Not live"
+              note="Awaiting Alpaca"
+              tone="muted"
+            />
+          )}
+          {alpacaLive ? (
+            <Metric
+              label="Alpaca equity"
+              value={usd(alpaca.data?.account?.equity)}
+              note={`Cash ${usd(alpaca.data?.account?.cash)}`}
+            />
+          ) : (
+            <Metric label="Alpaca equity" value="Not live" tone="muted" />
+          )}
+          {alpacaLive ? (
+            <Metric
+              label="Equity positions"
+              value={String(alpaca.data?.equityPositions.length ?? 0)}
+            />
+          ) : (
+            <Metric label="Equity positions" value="Not live" tone="muted" />
+          )}
           <Metric
             label="Capital allocated"
             value={usd(OPTIONS_PAPER_CAPITAL_USD)}
@@ -345,8 +402,8 @@ export function SummaryTab() {
             figures.
           </li>
           <li>
-            Options cells stay &quot;Not live&quot; until the paper fills feed exists; do not read
-            them as zero P&amp;L.
+            Options cells stay &quot;Not live&quot; until Alpaca secrets are set. Empty option
+            positions are valid once live — that means no open spreads, not a missing feed.
           </li>
           <li>
             Committed capital target remains {usd(TOTAL_PAPER_BOOK_USD)}; during the DCA ramp, ETF
