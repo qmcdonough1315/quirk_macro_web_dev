@@ -25,9 +25,11 @@ export const getPaperPortfolio = createServerFn({ method: "GET" }).handler(
         totalContributed: 0,
         strategy: { marketValue: 0, costBasis: 0, returnPct: 0, cash: 0 },
         voo: { marketValue: 0, costBasis: 0, returnPct: 0, cash: 0 },
+        mix: { marketValue: 0, costBasis: 0, returnPct: 0, cash: 0 },
         tax: {
           factor: zeroSleeveTax(),
           voo: zeroSleeveTax(),
+          mix: zeroSleeveTax(),
         },
         openLots: 0,
         recentTrades: [],
