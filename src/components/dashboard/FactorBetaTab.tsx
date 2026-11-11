@@ -26,6 +26,7 @@ import {
   taxLedgerTrades,
 } from "@/lib/paper-portfolio-rules";
 import { RegimeRead } from "@/components/dashboard/RegimeRead";
+import { OptionsSleevePanel } from "@/components/dashboard/OptionsSleevePanel";
 
 const pct = (n: number | null | undefined, digits = 2) =>
   typeof n === "number" && Number.isFinite(n) ? `${n > 0 ? "+" : ""}${n.toFixed(digits)}%` : "—";
@@ -397,7 +398,11 @@ function PaperPortfolioPanels({
         <div className="mb-2 flex flex-wrap items-center gap-2.5">
           <Landmark className="size-4 text-accent" />
           <h2 className="font-display text-base font-semibold tracking-tight">
-            Paper Strategy — ${WEEKLY_CONTRIBUTION_USD.toLocaleString()} Weekly DCA
+            Paper Strategy — $
+            {WEEKLY_CONTRIBUTION_USD.toLocaleString(undefined, {
+              maximumFractionDigits: 0,
+            })}{" "}
+            Weekly DCA · $50k / 13 weeks
           </h2>
           <span className="label-caps ml-auto">
             {isPending
@@ -409,12 +414,15 @@ function PaperPortfolioPanels({
         </div>
         <p className="mb-5 max-w-3xl text-sm text-muted-foreground">
           Catch-up replay starts with the {paper?.inceptionDate ?? STRATEGY_INCEPTION_DATE} model
-          run and continues through every later weekly run. Each run allocates $
-          {WEEKLY_CONTRIBUTION_USD.toLocaleString()} at the next session open using that week&apos;s
-          target weights (3-month tax-aware holds). Dividends are reinvested in the same ETF on the
-          ex-date. The VOO sleeve invests the same cash on the same dates. The asset-mix sleeve
-          invests that same cash in VOO, IJH, IJR, VEA, BND, TLT, and PDBC at the week&apos;s
-          category weights, and rebalances to those weights.
+          run and continues through every later weekly run. Each run allocates ~$
+          {WEEKLY_CONTRIBUTION_USD.toLocaleString(undefined, { maximumFractionDigits: 0 })} (1/13 of
+          the $50k ETF target) at the next session open using that week&apos;s target weights.
+          Lots clear the ~3-month hold on a ladder so one vintage becomes eligible each week after
+          week 13. Tax-lot sells prefer highest cost basis / least gain first and hold short-term
+          winners for long-term treatment when possible. Undeployed ETF capital (
+          {usd(paper?.etfFloatRemaining ?? 50_000)}) parks as float until its DCA week. Dividends
+          are reinvested on the ex-date. VOO and asset-mix benchmark sleeves invest the same weekly
+          cash (mix: VOO, IJH, IJR, VEA, BND, TLT, PDBC at category weights).
         </p>
 
         <div className="grid gap-4 xl:grid-cols-3">
@@ -775,6 +783,8 @@ export function FactorBetaTab() {
       </section>
 
       <PaperPortfolioPanels paper={paper} isPending={paperPending} />
+
+      <OptionsSleevePanel />
 
       <section className="panel p-6">
         <div className="mb-5 flex items-center gap-2.5">

@@ -7,7 +7,11 @@ import {
   type PaperWeeklyPoint,
   type SleeveTaxPosition,
 } from "./paper-portfolio.server";
-import { STRATEGY_INCEPTION_DATE } from "./paper-portfolio-rules";
+import {
+  ETF_TARGET_CAPITAL_USD,
+  STRATEGY_INCEPTION_DATE,
+  WEEKLY_CONTRIBUTION_USD,
+} from "./paper-portfolio-rules";
 
 export type { PaperPortfolioSnapshot, PaperWeeklyPoint, SleeveTaxPosition };
 
@@ -35,6 +39,9 @@ export const getPaperPortfolio = createServerFn({ method: "GET" }).handler(
         recentTrades: [],
         weeklySeries: [],
         notes: [message],
+        etfFloatRemaining: ETF_TARGET_CAPITAL_USD,
+        etfTargetCapital: ETF_TARGET_CAPITAL_USD,
+        weeklyContribution: WEEKLY_CONTRIBUTION_USD,
       };
     }
   },

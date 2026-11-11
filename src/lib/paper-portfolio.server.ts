@@ -5,18 +5,20 @@
  *   1) Evaluate lots that have cleared the 3-month minimum hold
  *   2) Tax-loss harvest (with factor-peer substitutes to avoid wash sales)
  *   3) Hold short-term winners for LTCG unless harvested losses can offset
- *   4) Dollar-cost average $1000 into the new target weights at next-session open
- *   5) Dollar-cost average $1000 into VOO on the same fill date (benchmark)
- *   6) Rebalance a second $1000 sleeve into the passive asset mix at that week's
+ *   4) Dollar-cost average WEEKLY_CONTRIBUTION_USD ($50k/13) into target weights
+ *   5) Dollar-cost average the same amount into VOO on the same fill date
+ *   6) Rebalance a second sleeve into the passive asset mix at that week's
  *      category weights (VOO, IJH, IJR, VEA, BND, TLT, PDBC)
  *   7) Reinvest dividends into the same ETF at the ex-date close, and apply splits
  *      to share count and cost with no tax event
+ *   8) When selling, order lots least-gain / highest-basis first (HIFO)
  */
 
 import { supabase } from "./supabase";
 import {
   ASSET_MIX_PROXIES,
   ETF_CATEGORY_PEERS,
+  ETF_TARGET_CAPITAL_USD,
   LONG_TERM_DAYS,
   MIN_HOLD_DAYS,
   STRATEGY_INCEPTION_DATE,
@@ -25,7 +27,9 @@ import {
   WEIGHT_EPS,
   assetMixWeights,
   categoryForTicker,
+  compareLotsLeastGainFirst,
   diffDays,
+  etfFloatRemainingUsd,
   identicalSet,
   nextBusinessDayAfter,
   taxLedgerTrades,
@@ -83,6 +87,10 @@ export interface PaperPortfolioSnapshot {
   recentTrades: PaperTrade[];
   weeklySeries: PaperWeeklyPoint[];
   notes: string[];
+  /** Undeployed portion of the $50k ETF target still parked for future DCA weeks. */
+  etfFloatRemaining: number;
+  etfTargetCapital: number;
+  weeklyContribution: number;
 }
 
 export interface SleeveTaxPosition {
@@ -491,12 +499,25 @@ function evaluateExits(
   currentWeights: WeightMap,
   prices: Map<string, Map<string, QuoteBar>>,
 ) {
-  const candidates = state.lots.filter(
-    (lot) => lot.strategy === "factor" && diffDays(lot.openedOn, asOf) >= MIN_HOLD_DAYS,
+  const priced = new Map<string, number>();
+  const candidates = state.lots.filter((lot) => {
+    if (lot.strategy !== "factor") return false;
+    if (diffDays(lot.openedOn, asOf) < MIN_HOLD_DAYS) return false;
+    const px = priceOnOrBefore(prices.get(lot.ticker), asOf, "open");
+    if (px == null) return false;
+    priced.set(lot.ticker, px);
+    return true;
+  });
+
+  // Least unrealized gain / highest cost basis first when reallocating.
+  candidates.sort((a, b) =>
+    compareLotsLeastGainFirst(a, b, priced.get(a.ticker)!, priced.get(b.ticker)!),
   );
 
   for (const lot of candidates) {
-    const px = priceOnOrBefore(prices.get(lot.ticker), asOf, "open");
+    // Lot may already have been closed earlier in this pass.
+    if (!state.lots.some((open) => open.id === lot.id)) continue;
+    const px = priced.get(lot.ticker) ?? priceOnOrBefore(prices.get(lot.ticker), asOf, "open");
     if (px == null) continue;
     const mtm = lot.shares * px;
     const cost = lot.shares * lot.costPerShare;
@@ -536,13 +557,12 @@ function evaluateExits(
       continue;
     }
 
-    // Winner
+    // Winner — prefer holding STCG lots; if we must sell, least-gain lots go first.
     if (age < LONG_TERM_DAYS) {
       const offset = availableLossOffset(state);
       if (!stillAllocated && pnl > 0 && offset >= pnl) {
         recordSale(state, lot, asOf, px, "gain_offset_by_harvested_losses");
       }
-      // else hold for long-term capital gains treatment
       continue;
     }
 
@@ -611,7 +631,9 @@ function sellMixShares(
 ): number {
   let left = sharesToSell;
   let proceeds = 0;
-  const lots = state.lots.filter((lot) => lot.strategy === "mix" && lot.ticker === ticker);
+  const lots = state.lots
+    .filter((lot) => lot.strategy === "mix" && lot.ticker === ticker)
+    .sort((a, b) => compareLotsLeastGainFirst(a, b, price, price));
   for (const lot of lots) {
     if (left <= 1e-8) break;
     const qty = Math.min(lot.shares, left);
@@ -656,7 +678,7 @@ function sellMixShares(
 
 /**
  * Rebalance the passive mix to this week's collapsed category weights, then
- * invest the new $1,000. Sells happen before buys so the sleeve matches the mix.
+ * invest the new weekly contribution. Sells happen before buys so the sleeve matches the mix.
  */
 function deployAssetMix(
   state: SimState,
@@ -969,6 +991,9 @@ function summarize(
     recentTrades: taxLedgerTrades(state.trades),
     weeklySeries,
     notes: state.notes.slice(-8),
+    etfFloatRemaining: etfFloatRemainingUsd(runCount),
+    etfTargetCapital: ETF_TARGET_CAPITAL_USD,
+    weeklyContribution: WEEKLY_CONTRIBUTION_USD,
   };
 }
 
@@ -991,6 +1016,9 @@ function emptySnapshot(notes: string[]): PaperPortfolioSnapshot {
     recentTrades: [],
     weeklySeries: [],
     notes,
+    etfFloatRemaining: ETF_TARGET_CAPITAL_USD,
+    etfTargetCapital: ETF_TARGET_CAPITAL_USD,
+    weeklyContribution: WEEKLY_CONTRIBUTION_USD,
   };
 }
 
