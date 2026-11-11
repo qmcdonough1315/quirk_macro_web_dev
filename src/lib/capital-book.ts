@@ -24,15 +24,19 @@ export {
   etfFloatRemainingUsd,
 };
 
-/** Until a live options ledger exists, buying power used is modeled as zero. */
+/**
+ * Placeholder only. Live buying power comes from the options fills feed.
+ * Omit it, or pass null, and cash partitions stay unknown instead of $0.
+ */
 export const OPTIONS_BP_USED_USD = 0;
 
 export function cashPartitions(input: {
   etfFloatRemaining: number;
-  optionsBpUsed?: number;
+  optionsBpUsed?: number | null;
 }) {
-  const bpUsed = Math.max(0, input.optionsBpUsed ?? OPTIONS_BP_USED_USD);
-  const freeCollateral = Math.max(0, CASH_MARGIN_RESERVE_USD - bpUsed);
+  const raw = input.optionsBpUsed;
+  const bpUsed = typeof raw === "number" && Number.isFinite(raw) ? Math.max(0, raw) : null;
+  const freeCollateral = bpUsed == null ? null : Math.max(0, CASH_MARGIN_RESERVE_USD - bpUsed);
   return {
     pledgedReserveUsd: CASH_MARGIN_RESERVE_USD,
     optionsBpUsedUsd: bpUsed,

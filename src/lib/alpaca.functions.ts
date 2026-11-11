@@ -1,12 +1,14 @@
 import { createServerFn } from "@tanstack/react-start";
 
-import {
-  emptyAlpacaLedger,
-  fetchAlpacaPaperLedger,
-  type AlpacaPaperLedger,
-} from "./alpaca.server";
+import { emptyAlpacaLedger, fetchAlpacaPaperLedger, type AlpacaPaperLedger } from "./alpaca.server";
 
-export type { AlpacaPaperLedger, AlpacaAccountSnapshot, AlpacaPosition } from "./alpaca.server";
+export type {
+  AlpacaPaperLedger,
+  AlpacaAccountSnapshot,
+  AlpacaPosition,
+  OptionsFillsFeed,
+  OpenSpread,
+} from "./alpaca.server";
 
 export const getAlpacaPaperLedger = createServerFn({ method: "GET" }).handler(
   async (): Promise<AlpacaPaperLedger> => {

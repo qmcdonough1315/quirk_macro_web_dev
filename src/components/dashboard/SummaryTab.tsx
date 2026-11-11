@@ -2,14 +2,7 @@ import type { ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import {
-  ArrowUpRight,
-  Landmark,
-  LayoutDashboard,
-  PiggyBank,
-  Scale,
-  Waves,
-} from "lucide-react";
+import { ArrowUpRight, Landmark, LayoutDashboard, PiggyBank, Scale, Waves } from "lucide-react";
 
 import { getAlpacaPaperLedger } from "@/lib/alpaca.functions";
 import { fetchCashManagerYields } from "@/lib/cash-manager";
@@ -22,14 +15,8 @@ import {
   WEEKLY_CONTRIBUTION_USD,
   cashPartitions,
 } from "@/lib/capital-book";
-import {
-  getPaperPortfolio,
-  type PaperPortfolioSnapshot,
-} from "@/lib/paper-portfolio.functions";
-import {
-  STRATEGY_INCEPTION_DATE,
-  annualizedAlphaPct,
-} from "@/lib/paper-portfolio-rules";
+import { getPaperPortfolio, type PaperPortfolioSnapshot } from "@/lib/paper-portfolio.functions";
+import { STRATEGY_INCEPTION_DATE, annualizedAlphaPct } from "@/lib/paper-portfolio-rules";
 
 const usd = (n: number | null | undefined, digits = 0) =>
   typeof n === "number" && Number.isFinite(n)
@@ -53,7 +40,7 @@ function Metric({
   label: string;
   value: string;
   note?: string;
-  tone?: "positive" | "negative" | "muted";
+  tone?: "positive" | "negative" | "muted" | undefined;
 }) {
   const valueClass =
     tone === "positive"
@@ -66,7 +53,9 @@ function Metric({
   return (
     <div className="rounded-lg border border-border/70 bg-secondary/20 p-4">
       <p className="label-caps">{label}</p>
-      <p className={`mt-2 font-display text-2xl font-semibold tabular-nums tracking-tight ${valueClass}`}>
+      <p
+        className={`mt-2 font-display text-2xl font-semibold tabular-nums tracking-tight ${valueClass}`}
+      >
         {value}
       </p>
       {note ? <p className="mt-1 text-xs text-muted-foreground">{note}</p> : null}
@@ -136,18 +125,10 @@ export function SummaryTab() {
   const runCount = snap?.runCount ?? 0;
   const etfFloat = snap?.etfFloatRemaining ?? ETF_TARGET_CAPITAL_USD;
   const alpacaLive = Boolean(alpaca.data?.live);
-  const optionsBp = alpaca.data?.account?.optionsBuyingPower ?? null;
-  const optionsBpUsed =
-    alpacaLive && optionsBp != null
-      ? Math.max(0, OPTIONS_PAPER_CAPITAL_USD - Math.min(OPTIONS_PAPER_CAPITAL_USD, optionsBp))
-      : 0;
-  const optionUnrealized = (alpaca.data?.optionPositions ?? []).reduce(
-    (s, p) => s + p.unrealizedPl,
-    0,
-  );
+  const feed = alpacaLive ? (alpaca.data?.optionsFeed ?? null) : null;
   const partitions = cashPartitions({
     etfFloatRemaining: etfFloat,
-    optionsBpUsed,
+    optionsBpUsed: feed ? feed.bpUsed : null,
   });
 
   const contributions =
@@ -184,9 +165,10 @@ export function SummaryTab() {
 
   // Prefer Alpaca equity when live; otherwise modeled ETF + cash sleeves.
   // Do not double-count options capital as a separate invested asset beyond cash/Alpaca equity.
-  const bookNav = alpacaLive && alpaca.data?.account
-    ? alpaca.data.account.equity
-    : (etfMv ?? 0) + CASH_MARGIN_RESERVE_USD + etfFloat + OPTIONS_PAPER_CAPITAL_USD;
+  const bookNav =
+    alpacaLive && alpaca.data?.account
+      ? alpaca.data.account.equity
+      : (etfMv ?? 0) + CASH_MARGIN_RESERVE_USD + etfFloat + OPTIONS_PAPER_CAPITAL_USD;
   const deployedEtf = snap?.totalContributed ?? 0;
   const topYield = yields.data?.funds[0];
   const avgYield = yields.data?.summary?.avg_yield ?? topYield?.sec_yield_30d ?? null;
@@ -201,6 +183,23 @@ export function SummaryTab() {
   const go = (tab: "factors" | "options" | "cash") => {
     void navigate({ search: { tab } });
   };
+
+  const optionCell = (value: number | null | undefined, format: (n: number) => string) => {
+    if (alpaca.isPending) return "…";
+    if (!alpacaLive || value == null || !Number.isFinite(value)) return "Not live";
+    return format(value);
+  };
+  const pnlTone = (value: number | null | undefined): "positive" | "negative" | "muted" => {
+    if (!alpacaLive || value == null || !Number.isFinite(value) || value === 0) return "muted";
+    return value > 0 ? "positive" : "negative";
+  };
+  const betaText = (value: number | null | undefined) =>
+    optionCell(value, (n) => `${n > 0 ? "+" : ""}${n.toFixed(1)}`);
+  const headroomText = optionCell(partitions.freeCollateralUsd, (n) => usd(n));
+  const headroomNote =
+    partitions.optionsBpUsedUsd == null
+      ? "Defined-risk buying power is not live"
+      : `${usd(partitions.optionsBpUsedUsd)} BP used of ${usd(CASH_MARGIN_RESERVE_USD)} reserve`;
 
   return (
     <div className="space-y-6">
@@ -235,7 +234,11 @@ export function SummaryTab() {
               <Metric
                 label="Book NAV (modeled)"
                 value={usd(bookNav)}
-                note={`ETF MV + cash reserve + ETF float + options capital`}
+                note={
+                  alpacaLive
+                    ? "Alpaca equity"
+                    : "ETF MV + cash reserve + ETF float + options capital"
+                }
               />
               <Metric
                 label="ETF deployed"
@@ -249,12 +252,50 @@ export function SummaryTab() {
               />
               <Metric
                 label="Margin headroom"
-                value={usd(partitions.freeCollateralUsd)}
-                note={`${usd(partitions.optionsBpUsedUsd)} BP used of ${usd(CASH_MARGIN_RESERVE_USD)} reserve`}
-                tone="positive"
+                value={headroomText}
+                note={headroomNote}
+                tone={partitions.freeCollateralUsd == null ? "muted" : "positive"}
               />
             </>
           )}
+        </div>
+
+        <div className="mt-4 border-t border-border/70 pt-4">
+          <p className="label-caps mb-3">Options risk strip</p>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+            <Metric
+              label="BP used"
+              value={optionCell(feed?.bpUsed, (n) => usd(n))}
+              note="Defined-risk margin"
+              tone={feed?.bpUsed == null ? "muted" : undefined}
+            />
+            <Metric
+              label="Headroom"
+              value={headroomText}
+              tone={partitions.freeCollateralUsd == null ? "muted" : "positive"}
+            />
+            <Metric
+              label="Open P&L"
+              value={optionCell(feed?.unrealizedPl, (n) => usd(n, 2))}
+              tone={pnlTone(feed?.unrealizedPl)}
+            />
+            <Metric
+              label="Realized premium"
+              value={optionCell(feed?.realizedPl, (n) => usd(n, 2))}
+              tone={pnlTone(feed?.realizedPl)}
+            />
+            <Metric
+              label="β-weighted Δ"
+              value={betaText(feed?.betaWeightedDelta)}
+              note="SPY-equivalent shares"
+              tone="muted"
+            />
+            <Metric
+              label="Max loss"
+              value={optionCell(feed?.maxLoss, (n) => usd(n))}
+              tone={feed?.maxLoss == null ? "muted" : undefined}
+            />
+          </div>
         </div>
       </section>
 
@@ -271,16 +312,12 @@ export function SummaryTab() {
               <Metric
                 label="Unrealized"
                 value={usd(etfUnreal)}
-                tone={
-                  etfUnreal == null ? "muted" : etfUnreal >= 0 ? "positive" : "negative"
-                }
+                tone={etfUnreal == null ? "muted" : etfUnreal >= 0 ? "positive" : "negative"}
               />
               <Metric
                 label="Realized (net)"
                 value={usd(etfRealized)}
-                tone={
-                  etfRealized == null ? "muted" : etfRealized >= 0 ? "positive" : "negative"
-                }
+                tone={etfRealized == null ? "muted" : etfRealized >= 0 ? "positive" : "negative"}
               />
               <Metric
                 label="Cumulative return"
@@ -299,58 +336,36 @@ export function SummaryTab() {
         </SleeveCard>
 
         <SleeveCard icon={Waves} title="Options Book · $25k" onOpen={() => go("options")}>
-          {alpacaLive ? (
-            <Metric
-              label="Options BP (Alpaca)"
-              value={usd(optionsBp)}
-              note="From paper account"
-            />
-          ) : (
-            <Metric
-              label="Options BP (Alpaca)"
-              value="Not live"
-              note="Add Alpaca secrets"
-              tone="muted"
-            />
-          )}
           <Metric
-            label="Margin headroom"
-            value={usd(partitions.freeCollateralUsd)}
-            note="Cash reserve − modeled BP used"
-            tone="positive"
+            label="BP used"
+            value={optionCell(feed?.bpUsed, (n) => usd(n))}
+            note={alpacaLive ? `${feed?.spreads.length ?? 0} open spreads` : "Add Alpaca secrets"}
+            tone={feed?.bpUsed == null ? "muted" : undefined}
           />
-          {alpacaLive ? (
-            <Metric
-              label="Open options P&L"
-              value={usd(optionUnrealized, 2)}
-              note={`${alpaca.data?.optionPositions.length ?? 0} option positions`}
-              tone={optionUnrealized >= 0 ? "positive" : "negative"}
-            />
-          ) : (
-            <Metric
-              label="Open options P&L"
-              value="Not live"
-              note="Awaiting Alpaca"
-              tone="muted"
-            />
-          )}
-          {alpacaLive ? (
-            <Metric
-              label="Alpaca equity"
-              value={usd(alpaca.data?.account?.equity)}
-              note={`Cash ${usd(alpaca.data?.account?.cash)}`}
-            />
-          ) : (
-            <Metric label="Alpaca equity" value="Not live" tone="muted" />
-          )}
-          {alpacaLive ? (
-            <Metric
-              label="Equity positions"
-              value={String(alpaca.data?.equityPositions.length ?? 0)}
-            />
-          ) : (
-            <Metric label="Equity positions" value="Not live" tone="muted" />
-          )}
+          <Metric
+            label="Open options P&L"
+            value={optionCell(feed?.unrealizedPl, (n) => usd(n, 2))}
+            note={alpacaLive ? `${feed?.openLegCount ?? 0} option legs` : "Awaiting Alpaca"}
+            tone={pnlTone(feed?.unrealizedPl)}
+          />
+          <Metric
+            label="Realized premium"
+            value={optionCell(feed?.realizedPl, (n) => usd(n, 2))}
+            note="Closed option fills"
+            tone={pnlTone(feed?.realizedPl)}
+          />
+          <Metric
+            label="β-weighted Δ"
+            value={betaText(feed?.betaWeightedDelta)}
+            note="SPY-equivalent shares"
+            tone="muted"
+          />
+          <Metric
+            label="Max loss"
+            value={optionCell(feed?.maxLoss, (n) => usd(n))}
+            note="Defined-risk spreads"
+            tone={feed?.maxLoss == null ? "muted" : undefined}
+          />
           <Metric
             label="Capital allocated"
             value={usd(OPTIONS_PAPER_CAPITAL_USD)}
@@ -366,8 +381,8 @@ export function SummaryTab() {
           />
           <Metric
             label="Free collateral"
-            value={usd(partitions.freeCollateralUsd)}
-            tone="positive"
+            value={headroomText}
+            tone={partitions.freeCollateralUsd == null ? "muted" : "positive"}
           />
           <Metric
             label="ETF DCA float"
@@ -398,12 +413,15 @@ export function SummaryTab() {
             until spreads are on.
           </li>
           <li>
-            ETF alpha vs VOO / asset-mix is sleeve-only — options P&amp;L is never blended into those
-            figures.
+            ETF alpha vs VOO / asset-mix is sleeve-only — options P&amp;L is never blended into
+            those figures.
           </li>
           <li>
-            Options cells stay &quot;Not live&quot; until Alpaca secrets are set. Empty option
-            positions are valid once live — that means no open spreads, not a missing feed.
+            Options cells stay &quot;Not live&quot; until Alpaca secrets are set, or when an
+            unpaired short leaves buying power and max loss undefined. A live book with no option
+            positions is flat: those cells are $0, not a missing feed. Buying power used is
+            defined-risk margin (credit-spread max loss). β-weighted delta needs a greek on every
+            open leg.
           </li>
           <li>
             Committed capital target remains {usd(TOTAL_PAPER_BOOK_USD)}; during the DCA ramp, ETF
