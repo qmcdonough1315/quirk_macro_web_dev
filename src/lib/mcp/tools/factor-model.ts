@@ -11,6 +11,16 @@ export default defineTool({
   handler: async () => {
     const data = await fetchFactorBetaData();
     const run = data.current;
+    if (!run) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({ live: false, message: "No factor run is available." }),
+          },
+        ],
+      };
+    }
     const payload = {
       as_of: run.as_of_date,
       live: data.live,

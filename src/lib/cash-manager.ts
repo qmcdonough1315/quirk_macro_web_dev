@@ -39,96 +39,6 @@ export interface CashEngineData {
 const FALLBACK_URL = (ticker: string) =>
   `https://www.google.com/search?q=${encodeURIComponent(ticker + " fund")}`;
 
-export const mockCashFunds: CashFund[] = [
-  {
-    id: "mock-1",
-    as_of_date: "2026-08-21",
-    ticker: "SGOV",
-    fund_name: "iShares 0-3 Month Treasury Bond ETF",
-    category: "Short Treasury",
-    sec_yield_30d: 5.21,
-    expense_ratio: 0.09,
-    distribution_frequency: "Monthly",
-    detail_url: "https://www.ishares.com/us/products/314116/",
-  },
-  {
-    id: "mock-2",
-    as_of_date: "2026-08-21",
-    ticker: "SPAXX",
-    fund_name: "Fidelity Government Money Market Fund",
-    category: "Government Money Market",
-    sec_yield_30d: 4.98,
-    expense_ratio: 0.42,
-    distribution_frequency: "Accrued daily",
-    detail_url: "https://fundresearch.fidelity.com/mutual-funds/summary/31617H102",
-  },
-  {
-    id: "mock-3",
-    as_of_date: "2026-08-21",
-    ticker: "VMFXX",
-    fund_name: "Vanguard Federal Money Market Fund",
-    category: "Government Money Market",
-    sec_yield_30d: 5.02,
-    expense_ratio: 0.11,
-    distribution_frequency: "Accrued daily",
-    detail_url: "https://investor.vanguard.com/investment-products/mutual-funds/profile/vmfxx",
-  },
-  {
-    id: "mock-4",
-    as_of_date: "2026-08-21",
-    ticker: "BIL",
-    fund_name: "SPDR Bloomberg 1-3 Month T-Bill ETF",
-    category: "Short Treasury",
-    sec_yield_30d: 5.14,
-    expense_ratio: 0.135,
-    distribution_frequency: "Monthly",
-    detail_url: "https://www.ssga.com/us/en/intermediary/etfs/bil",
-  },
-  {
-    id: "mock-5",
-    as_of_date: "2026-08-21",
-    ticker: "TFLO",
-    fund_name: "iShares Treasury Floating Rate Bond ETF",
-    category: "Floating Rate Treasury",
-    sec_yield_30d: 5.24,
-    expense_ratio: 0.15,
-    distribution_frequency: "Monthly",
-    detail_url: "https://www.ishares.com/us/products/261688/",
-  },
-  {
-    id: "mock-6",
-    as_of_date: "2026-08-21",
-    ticker: "SWVXX",
-    fund_name: "Schwab Value Advantage Money Fund",
-    category: "Prime Money Market",
-    sec_yield_30d: 5.11,
-    expense_ratio: 0.34,
-    distribution_frequency: "Accrued daily",
-    detail_url: "https://www.schwabassetmanagement.com/products/swvxx",
-  },
-  {
-    id: "mock-7",
-    as_of_date: "2026-08-21",
-    ticker: "USFR",
-    fund_name: "WisdomTree Floating Rate Treasury Fund",
-    category: "Floating Rate Treasury",
-    sec_yield_30d: 5.19,
-    expense_ratio: 0.15,
-    distribution_frequency: "Monthly",
-    detail_url: "https://www.wisdomtree.com/investments/etfs/fixed-income/usfr",
-  },
-  {
-    id: "mock-8",
-    as_of_date: "2026-08-21",
-    ticker: "SPRXX",
-    fund_name: "Fidelity Money Market Fund",
-    category: "Prime Money Market",
-    sec_yield_30d: 4.94,
-    expense_ratio: 0.42,
-    distribution_frequency: "Accrued daily",
-    detail_url: "https://fundresearch.fidelity.com/mutual-funds/summary/31617H201",
-  },
-];
 
 /** Lowercase + strip everything non-alphanumeric for forgiving key matching. */
 const normKey = (k: string) => k.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -267,7 +177,6 @@ export async function fetchCashManagerYields(): Promise<CashEngineData> {
 
     return { funds, summary, live: true, asOf: asOf || null };
   } catch {
-    const funds = [...mockCashFunds].sort((a, b) => b.sec_yield_30d - a.sec_yield_30d);
-    return { funds, summary: null, live: false, asOf: mockCashFunds[0]!.as_of_date };
+    return { funds: [], summary: null, live: false, asOf: null };
   }
 }

@@ -245,16 +245,20 @@ function PaperPortfolioPanels({
                 Array.from({ length: 3 }).map((_, i) => (
                   <div key={i} className="h-24 animate-pulse rounded-lg bg-secondary/40" />
                 ))
-              ) : (
+              ) : paper?.live ? (
                 <>
                   <MetricTile
                     label="Cumulative return"
-                    value={pct(paper?.strategy.returnPct)}
+                    value={pct(paper.strategy.returnPct)}
                     tone={strategyTone}
                   />
-                  <MetricTile label="Portfolio value" value={usd(paper?.strategy.marketValue)} />
-                  <MetricTile label="Cost basis" value={usd(paper?.strategy.costBasis)} />
+                  <MetricTile label="Portfolio value" value={usd(paper.strategy.marketValue)} />
+                  <MetricTile label="Cost basis" value={usd(paper.strategy.costBasis)} />
                 </>
+              ) : (
+                <p className="text-sm text-muted-foreground sm:col-span-3">
+                  {paper?.notes[0] ?? "The paper book has not been published by the model job."}
+                </p>
               )}
             </div>
           </div>
@@ -265,16 +269,20 @@ function PaperPortfolioPanels({
                 Array.from({ length: 3 }).map((_, i) => (
                   <div key={i} className="h-24 animate-pulse rounded-lg bg-secondary/40" />
                 ))
-              ) : (
+              ) : paper?.live ? (
                 <>
                   <MetricTile
                     label="Cumulative return"
-                    value={pct(paper?.voo.returnPct)}
+                    value={pct(paper.voo.returnPct)}
                     tone={vooTone}
                   />
-                  <MetricTile label="Portfolio value" value={usd(paper?.voo.marketValue)} />
-                  <MetricTile label="Cost basis" value={usd(paper?.voo.costBasis)} />
+                  <MetricTile label="Portfolio value" value={usd(paper.voo.marketValue)} />
+                  <MetricTile label="Cost basis" value={usd(paper.voo.costBasis)} />
                 </>
+              ) : (
+                <p className="text-sm text-muted-foreground sm:col-span-3">
+                  VOO comparison publishes with the same model job.
+                </p>
               )}
             </div>
           </div>
@@ -354,11 +362,11 @@ function PaperPortfolioPanels({
             Array.from({ length: 5 }).map((_, i) => (
               <div key={i} className="h-24 animate-pulse rounded-lg bg-secondary/40" />
             ))
-          ) : (
+          ) : paper?.live ? (
             <>
               <MetricTile
                 label="Cum. realized gains"
-                value={usd(paper?.tax.cumulativeRealizedGains)}
+                value={usd(paper.tax.cumulativeRealizedGains)}
                 tone="positive"
               />
               <MetricTile
@@ -378,10 +386,14 @@ function PaperPortfolioPanels({
               />
               <MetricTile
                 label="Cum. unrealized losses"
-                value={usd(paper?.tax.cumulativeUnrealizedLosses)}
+                value={usd(paper.tax.cumulativeUnrealizedLosses)}
                 tone="negative"
               />
             </>
+          ) : (
+            <p className="text-sm text-muted-foreground sm:col-span-2 xl:col-span-5">
+              Tax lots are published by the weekly model job. None are available yet.
+            </p>
           )}
         </div>
         {!isPending && paper?.recentTrades?.length ? (
@@ -456,15 +468,15 @@ export function FactorBetaTab() {
     : [];
 
   return (
-    <div className="relative space-y-6 pb-16">
+    <div className="space-y-6">
       <section className="panel p-6">
         <div className="mb-4 flex items-center gap-2.5">
           <Brain className="size-4 text-accent" />
           <h2 className="font-display text-base font-semibold tracking-tight">
             Current Regime Read — Fama-French &amp; Carhart
           </h2>
-          <span className="label-caps ml-auto">
-            {isPending ? "Loading" : data?.live ? "Live model run" : "Placeholder run"}
+          <span className="label-caps w-full sm:ml-auto sm:w-auto">
+            {isPending ? "Loading" : data?.live && current ? "Live model run" : "Unavailable"}
             {current ? ` · ${current.as_of_date}` : ""}
           </span>
         </div>
@@ -480,6 +492,10 @@ export function FactorBetaTab() {
         </div>
         {isPending ? (
           <div className="h-56 animate-pulse rounded-lg bg-secondary/40" />
+        ) : !current ? (
+          <p className="text-sm text-muted-foreground">
+            The latest factor run is not available. No placeholder book is shown.
+          </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[560px] text-sm">
@@ -597,9 +613,6 @@ export function FactorBetaTab() {
         )}
       </section>
 
-      <p className="pointer-events-none sticky bottom-4 z-10 ml-auto w-fit rounded-md border border-border/70 bg-background/85 px-3 py-2 text-right text-xs text-muted-foreground backdrop-blur">
-        Disclaimer: Not Investment Advice. For informational and educational purposes only.
-      </p>
     </div>
   );
 }
