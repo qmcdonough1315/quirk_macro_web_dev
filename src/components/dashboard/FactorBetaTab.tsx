@@ -22,6 +22,7 @@ import {
 import {
   STRATEGY_INCEPTION_DATE,
   WEEKLY_CONTRIBUTION_USD,
+  annualizedAlphaPct,
   taxLedgerTrades,
 } from "@/lib/paper-portfolio-rules";
 import { RegimeRead } from "@/components/dashboard/RegimeRead";
@@ -41,6 +42,56 @@ const usd = (n: number | null | undefined, digits = 0) =>
         maximumFractionDigits: digits,
       })
     : "—";
+
+function AnnualizedAlphaTile({
+  paper,
+  isPending,
+}: {
+  paper: PaperPortfolioSnapshot | undefined;
+  isPending: boolean;
+}) {
+  const alpha =
+    paper?.live && paper.weeklySeries.length
+      ? annualizedAlphaPct({
+          contributions: paper.weeklySeries.map((row) => ({
+            date: row.fillDate,
+            amount: WEEKLY_CONTRIBUTION_USD,
+          })),
+          asOf: paper.asOf,
+          factorValue: paper.strategy.marketValue,
+          vooValue: paper.voo.marketValue,
+        })
+      : null;
+  const since = new Date(`${STRATEGY_INCEPTION_DATE}T00:00:00Z`).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+
+  return (
+    <div className="flex w-full shrink-0 flex-col items-center justify-center rounded-lg border border-border/70 bg-secondary/20 px-4 py-6 text-center lg:w-48 lg:self-center">
+      <p className="label-caps">Annualized alpha</p>
+      {isPending ? (
+        <div className="mt-3 h-10 w-28 animate-pulse rounded-md bg-secondary/70" />
+      ) : (
+        <p
+          className={`mt-2 font-display text-4xl font-semibold tabular-nums tracking-tight ${
+            alpha === null
+              ? "text-muted-foreground"
+              : alpha >= 0
+                ? "text-positive"
+                : "text-negative"
+          }`}
+        >
+          {pct(alpha, 1)}
+        </p>
+      )}
+      <p className="mt-3 text-xs leading-snug text-muted-foreground">Factor DCA vs VOO</p>
+      <p className="mt-1 text-xs text-muted-foreground">Since {since}</p>
+    </div>
+  );
+}
 
 function DeltaBadge({ value }: { value: number }) {
   const good = value >= 0;
@@ -533,7 +584,12 @@ export function FactorBetaTab() {
             {current ? ` · ${current.as_of_date}` : ""}
           </span>
         </div>
-        <RegimeRead />
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-center">
+          <div className="min-w-0 flex-1">
+            <RegimeRead />
+          </div>
+          <AnnualizedAlphaTile paper={paper} isPending={paperPending} />
+        </div>
       </section>
 
       <section className="panel p-6">
