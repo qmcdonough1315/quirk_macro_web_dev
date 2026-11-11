@@ -5,12 +5,27 @@ import {
   Crown,
   Landmark,
   PiggyBank,
+  Shield,
   Trophy,
   Wallet,
 } from "lucide-react";
 
 import { fetchCashManagerYields, type CashFund } from "@/lib/cash-manager";
+import {
+  CASH_MARGIN_RESERVE_USD,
+  ETF_TARGET_CAPITAL_USD,
+  OPTIONS_BP_USED_USD,
+  cashPartitions,
+} from "@/lib/capital-book";
+import { getPaperPortfolio } from "@/lib/paper-portfolio.functions";
 import { getRatesOutlook } from "@/lib/market.functions";
+
+const usd = (n: number) =>
+  n.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  });
 
 const pct = (n: number, digits = 2) => `${n.toFixed(digits)}%`;
 
@@ -125,6 +140,14 @@ export function CashManagerTab() {
     retry: 1,
   });
 
+  const fetchPaper = useServerFn(getPaperPortfolio);
+  const paper = useQuery({
+    queryKey: ["paper-portfolio"],
+    queryFn: () => fetchPaper(),
+    staleTime: 10 * 60_000,
+    retry: 1,
+  });
+
   const funds = yields.data?.funds ?? [];
   const top = funds[0];
   const summary = yields.data?.summary ?? null;
@@ -145,8 +168,58 @@ export function CashManagerTab() {
         : "FRED benchmark unavailable";
   const loading = yields.isPending;
 
+  const etfFloat = paper.data?.etfFloatRemaining ?? ETF_TARGET_CAPITAL_USD;
+  const partitions = cashPartitions({
+    etfFloatRemaining: etfFloat,
+    optionsBpUsed: OPTIONS_BP_USED_USD,
+  });
+
   return (
     <div className="space-y-6">
+      <section className="panel p-6">
+        <div className="mb-4 flex flex-wrap items-center gap-2.5">
+          <Shield className="size-4 text-accent" />
+          <h2 className="font-display text-base font-semibold tracking-tight">
+            Collateral &amp; cash partitions
+          </h2>
+          <span className="label-caps ml-auto">Paper book · $100k</span>
+        </div>
+        <p className="mb-5 max-w-3xl text-sm text-muted-foreground">
+          The {usd(CASH_MARGIN_RESERVE_USD)} options margin reserve is permanent collateral. ETF DCA
+          float is earmarked for future factor buys and is not available for options buying power.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <MetricCard
+            icon={Shield}
+            label="Pledged options reserve"
+            value={usd(partitions.pledgedReserveUsd)}
+            note={`${usd(partitions.optionsBpUsedUsd)} BP used · not live`}
+            loading={false}
+          />
+          <MetricCard
+            icon={Wallet}
+            label="Free collateral"
+            value={usd(partitions.freeCollateralUsd)}
+            note="Reserve minus options BP used"
+            loading={false}
+          />
+          <MetricCard
+            icon={PiggyBank}
+            label="ETF DCA float"
+            value={usd(partitions.etfFloatUsd)}
+            note="Earmarked for weekly factor contributions"
+            loading={paper.isPending}
+          />
+          <MetricCard
+            icon={Landmark}
+            label="Cash bucket total"
+            value={usd(partitions.totalCashBucketUsd)}
+            note="Reserve + ETF float (counted once)"
+            loading={paper.isPending}
+          />
+        </div>
+      </section>
+
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <MetricCard
           icon={Trophy}

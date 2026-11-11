@@ -1,15 +1,39 @@
 /**
  * Shared policy constants for the factor-model paper portfolio.
- * Keep these aligned with vendor/ETF_Quant_Model_patch/config.py.
+ * Keep these aligned with ETF_Quant_Model/config.py.
  */
 
-export const WEEKLY_CONTRIBUTION_USD = 1000;
+/** Target ETF sleeve capital; DCA'd evenly over DCA_WEEKS. */
+export const ETF_TARGET_CAPITAL_USD = 50_000;
+/** ~3-month min-hold ladder: one weekly vintage clears eligibility each week after week 13. */
+export const DCA_WEEKS = 13;
+export const WEEKLY_CONTRIBUTION_USD = ETF_TARGET_CAPITAL_USD / DCA_WEEKS; // ≈ 3846.1538…
 export const MIN_HOLD_DAYS = 91; // ~3 months calendar
 export const LONG_TERM_DAYS = 365;
 export const WASH_SALE_DAYS = 30;
 export const WEIGHT_EPS = 1e-4;
 /** Paper strategy catch-up inception (inclusive model-run date). */
 export const STRATEGY_INCEPTION_DATE = "2026-09-20";
+
+/** Undeployed ETF capital still sitting in the yield engine during the DCA ramp. */
+export function etfFloatRemainingUsd(runCount: number): number {
+  const invested = Math.min(ETF_TARGET_CAPITAL_USD, Math.max(0, runCount) * WEEKLY_CONTRIBUTION_USD);
+  return Math.max(0, ETF_TARGET_CAPITAL_USD - invested);
+}
+
+/**
+ * HIFO / least-gain sort key for tax-lot sells.
+ * Lower unrealized $ gain first; ties break to higher cost basis, then older open date.
+ */
+export function compareLotsLeastGainFirst<
+  T extends { costPerShare: number; shares: number; openedOn: string },
+>(a: T, b: T, priceA: number, priceB: number): number {
+  const pnlA = a.shares * priceA - a.shares * a.costPerShare;
+  const pnlB = b.shares * priceB - b.shares * b.costPerShare;
+  if (pnlA !== pnlB) return pnlA - pnlB;
+  if (a.costPerShare !== b.costPerShare) return b.costPerShare - a.costPerShare;
+  return a.openedOn.localeCompare(b.openedOn);
+}
 
 /** Tickers treated as substantially identical for wash-sale avoidance. */
 export const SUBSTANTIALLY_IDENTICAL: Record<string, string[]> = {
