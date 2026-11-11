@@ -83,6 +83,315 @@ export function categoryForTicker(ticker: string): string | null {
   return null;
 }
 
+/** Passive asset-mix proxies. US equity that is not mid-cap, small-cap, or international maps to VOO. */
+export const ASSET_MIX_PROXIES = ["VOO", "IJH", "IJR", "VEA", "BND", "TLT", "PDBC"] as const;
+export type AssetMixProxy = (typeof ASSET_MIX_PROXIES)[number];
+
+const PROXY_TICKERS: Record<AssetMixProxy, string[]> = {
+  IJH: [
+    "IJH",
+    "RNIN",
+    "COWZ",
+    "RDIV",
+    "VO",
+    "MDY",
+    "IWR",
+    "IJJ",
+    "VOE",
+    "IWS",
+    "DON",
+    "RFV",
+    "XMVM",
+  ],
+  IJR: [
+    "DFAS",
+    "AVUV",
+    "CALF",
+    "IJR",
+    "VB",
+    "DFAT",
+    "SCHA",
+    "VTWO",
+    "IWM",
+    "IWN",
+    "IWO",
+    "SLYV",
+    "RZV",
+    "XSHQ",
+    "RWJ",
+    "DFSV",
+  ],
+  VEA: [
+    "VEA",
+    "IEFA",
+    "CGIC",
+    "DFIV",
+    "VWO",
+    "IEMG",
+    "CGNG",
+    "EMMF",
+    "EFA",
+    "EEM",
+    "AVDE",
+    "VXUS",
+    "IXUS",
+    "IDEV",
+    "EFV",
+    "EFG",
+    "SCZ",
+    "EMXC",
+    "DXJ",
+    "EWJ",
+    "HEFA",
+  ],
+  PDBC: [
+    "DBC",
+    "GSG",
+    "GLD",
+    "SLV",
+    "DBMF",
+    "KMLM",
+    "CTA",
+    "JGLO",
+    "PDBC",
+    "USO",
+    "FTGC",
+    "DBA",
+    "IAUM",
+    "WTMF",
+    "FMF",
+    "BCI",
+  ],
+  BND: ["BOND", "FBND", "JCPB", "AGG", "BND", "HYG", "LQD", "VCIT", "EMB", "SJNK"],
+  TLT: ["MINT", "TFLR", "SHY", "TLT", "IEF", "IEI", "TIP", "VTIP", "BIL", "SGOV"],
+  VOO: [
+    "VOO",
+    "TCAF",
+    "OAKM",
+    "DSTL",
+    "CGDV",
+    "RSP",
+    "SCHD",
+    "AQEC",
+    "IVV",
+    "SPY",
+    "VTI",
+    "QUAL",
+    "SPHQ",
+    "USMV",
+    "MOAT",
+    "DUHP",
+    "VUG",
+    "LSGR",
+    "PCLG",
+    "IWF",
+    "SCHG",
+    "AKRE",
+    "MGK",
+    "RPG",
+    "IVW",
+    "IWY",
+    "VONG",
+    "QQQM",
+    "ONEQ",
+    "LRGE",
+    "BUSA",
+    "MFSV",
+    "VTV",
+    "IWD",
+    "CGCV",
+    "RPV",
+    "SCHV",
+    "IVE",
+    "VLUE",
+    "AVLV",
+    "DFLV",
+    "FNDX",
+    "RWL",
+    "PWV",
+    "MTUM",
+    "PDP",
+    "SPHB",
+    "QMOM",
+    "JMOM",
+    "FDMO",
+    "XMMO",
+    "DWAS",
+    "SPMO",
+    "VFMO",
+    "FCPI",
+    "VIG",
+    "TDVG",
+    "DIVB",
+    "DGRO",
+    "SDY",
+    "HDV",
+    "VYM",
+    "NOBL",
+    "DGRW",
+    "DVY",
+    "RDVY",
+    "SCHY",
+    "IDV",
+    "DIVO",
+    "XLK",
+    "VGT",
+    "FTEC",
+    "SMH",
+    "IGV",
+    "SOXX",
+    "XSD",
+    "CLOU",
+    "CIBR",
+    "SKYY",
+    "QQQ",
+    "FDN",
+    "AIQ",
+    "BOTZ",
+    "HACK",
+    "WCLD",
+    "XLV",
+    "VHT",
+    "XBI",
+    "IHI",
+    "IBB",
+    "IHF",
+    "FHLC",
+    "IYH",
+    "PJP",
+    "XHS",
+    "BBH",
+    "PBE",
+    "XLF",
+    "VFH",
+    "KRE",
+    "KBWB",
+    "IAI",
+    "KCE",
+    "FNCL",
+    "KBE",
+    "IYF",
+    "IAK",
+    "KIE",
+    "FXO",
+    "KBWP",
+    "XLY",
+    "VCR",
+    "RSPD",
+    "XRT",
+    "FDIS",
+    "IYC",
+    "CARZ",
+    "PEJ",
+    "PEZ",
+    "ONLN",
+    "IBUY",
+    "XLP",
+    "VDC",
+    "IYK",
+    "FSTA",
+    "RHS",
+    "PBJ",
+    "KXI",
+    "PSL",
+    "PSCC",
+    "FXG",
+    "XLE",
+    "VDE",
+    "XOP",
+    "AMLP",
+    "OIH",
+    "FENY",
+    "IYE",
+    "FCG",
+    "URA",
+    "PXE",
+    "XES",
+    "IEO",
+    "XLI",
+    "VIS",
+    "IYJ",
+    "FIDU",
+    "ITA",
+    "XAR",
+    "IYT",
+    "EXI",
+    "AIRR",
+    "PKB",
+    "SHLD",
+    "XLB",
+    "VAW",
+    "XME",
+    "FMAT",
+    "LIT",
+    "REMX",
+    "SIL",
+    "GDX",
+    "PICK",
+    "COPX",
+    "GDXJ",
+    "SLVP",
+    "BATT",
+    "XLU",
+    "VPU",
+    "IDU",
+    "IGF",
+    "NFRA",
+    "PAVE",
+    "GRID",
+    "ICLN",
+    "TAN",
+    "NLR",
+    "JXI",
+    "IFRA",
+    "UTES",
+    "ZAP",
+    "CNRG",
+    "PBW",
+    "XLRE",
+    "VNQ",
+    "DFAR",
+    "IYR",
+    "FREL",
+    "MORT",
+    "REZ",
+    "INDS",
+    "SCHH",
+    "RWR",
+    "SRVR",
+    "PPTY",
+    "HOMZ",
+    "XLC",
+    "VOX",
+    "FCOM",
+    "NXTG",
+  ],
+};
+
+const TICKER_PROXY = new Map<string, AssetMixProxy>();
+for (const proxy of ["TLT", "BND", "PDBC", "IJH", "IJR", "VEA", "VOO"] as const) {
+  for (const ticker of PROXY_TICKERS[proxy]) TICKER_PROXY.set(ticker, proxy);
+}
+
+export function proxyForTicker(ticker: string): AssetMixProxy {
+  return TICKER_PROXY.get(ticker.toUpperCase()) ?? "VOO";
+}
+
+/** Collapse a model weight map into the seven-proxy asset mix. Weights are renormalized. */
+export function assetMixWeights(weights: Record<string, number>): Record<AssetMixProxy, number> {
+  const totals = {} as Record<AssetMixProxy, number>;
+  let sum = 0;
+  for (const [ticker, weight] of Object.entries(weights)) {
+    if (weight <= 0) continue;
+    const proxy = proxyForTicker(ticker);
+    totals[proxy] = (totals[proxy] ?? 0) + weight;
+    sum += weight;
+  }
+  if (sum <= 0) return {} as Record<AssetMixProxy, number>;
+  for (const proxy of Object.keys(totals) as AssetMixProxy[]) totals[proxy] = totals[proxy]! / sum;
+  return totals;
+}
+
 export function identicalSet(ticker: string): Set<string> {
   const t = ticker.toUpperCase();
   return new Set([t, ...(SUBSTANTIALLY_IDENTICAL[t] ?? [])]);
@@ -99,18 +408,24 @@ export function diffDays(a: string, b: string): number {
   return Math.floor(ms / 86_400_000);
 }
 
-/** VOO benchmark DCA is not a factor tax lot. */
-export function isBenchmarkVooTrade(trade: { strategy?: string; reason?: string }): boolean {
-  return trade.strategy === "voo" || trade.reason === "weekly_voo_dca";
+/** Benchmark sleeves are not factor tax lots. */
+export function isBenchmarkTrade(trade: { strategy?: string; reason?: string }): boolean {
+  return (
+    trade.strategy === "voo" ||
+    trade.strategy === "mix" ||
+    trade.reason === "weekly_voo_dca" ||
+    trade.reason === "weekly_mix_dca" ||
+    trade.reason === "mix_rebalance"
+  );
 }
 
-/** Newest factor-sleeve trades for the Tax Lot Ledger, excluding the VOO benchmark. */
+/** Newest factor-sleeve trades for the Tax Lot Ledger, excluding both benchmarks. */
 export function taxLedgerTrades<T extends { strategy?: string; reason?: string }>(
   trades: T[],
   limit = 12,
 ): T[] {
   return trades
-    .filter((trade) => !isBenchmarkVooTrade(trade))
+    .filter((trade) => !isBenchmarkTrade(trade))
     .slice(-limit)
     .reverse();
 }
@@ -213,15 +528,15 @@ export function annualizedAlphaPct(input: {
   contributions: DatedCashFlow[];
   asOf: string;
   factorValue: number;
-  vooValue: number;
+  benchmarkValue: number;
 }): number | null {
-  const { contributions, asOf, factorValue, vooValue } = input;
+  const { contributions, asOf, factorValue, benchmarkValue } = input;
   if (!asOf || contributions.length === 0) return null;
   if (
     !Number.isFinite(factorValue) ||
-    !Number.isFinite(vooValue) ||
+    !Number.isFinite(benchmarkValue) ||
     factorValue <= 0 ||
-    vooValue <= 0
+    benchmarkValue <= 0
   ) {
     return null;
   }
@@ -230,9 +545,9 @@ export function annualizedAlphaPct(input: {
     amount: -Math.abs(flow.amount),
   }));
   const factor = xirr([...invested, { date: asOf, amount: factorValue }]);
-  const voo = xirr([...invested, { date: asOf, amount: vooValue }]);
-  if (factor === null || voo === null) return null;
-  return (factor - voo) * 100;
+  const benchmark = xirr([...invested, { date: asOf, amount: benchmarkValue }]);
+  if (factor === null || benchmark === null) return null;
+  return (factor - benchmark) * 100;
 }
 
 /** Next weekday on/after the day following `iso` (model run → next session). */

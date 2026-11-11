@@ -43,6 +43,21 @@ const usd = (n: number | null | undefined, digits = 0) =>
       })
     : "—";
 
+function AlphaLine({ label, value }: { label: string; value: number | null }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span
+        className={`font-display text-2xl font-semibold tabular-nums tracking-tight ${
+          value === null ? "text-muted-foreground" : value >= 0 ? "text-positive" : "text-negative"
+        }`}
+      >
+        {pct(value, 1)}
+      </span>
+    </div>
+  );
+}
+
 function AnnualizedAlphaTile({
   paper,
   isPending,
@@ -50,18 +65,29 @@ function AnnualizedAlphaTile({
   paper: PaperPortfolioSnapshot | undefined;
   isPending: boolean;
 }) {
-  const alpha =
+  const contributions =
     paper?.live && paper.weeklySeries.length
-      ? annualizedAlphaPct({
-          contributions: paper.weeklySeries.map((row) => ({
-            date: row.fillDate,
-            amount: WEEKLY_CONTRIBUTION_USD,
-          })),
-          asOf: paper.asOf,
-          factorValue: paper.strategy.marketValue,
-          vooValue: paper.voo.marketValue,
-        })
+      ? paper.weeklySeries.map((row) => ({
+          date: row.fillDate,
+          amount: WEEKLY_CONTRIBUTION_USD,
+        }))
       : null;
+  const vsVoo = contributions
+    ? annualizedAlphaPct({
+        contributions,
+        asOf: paper!.asOf,
+        factorValue: paper!.strategy.marketValue,
+        benchmarkValue: paper!.voo.marketValue,
+      })
+    : null;
+  const vsMix = contributions
+    ? annualizedAlphaPct({
+        contributions,
+        asOf: paper!.asOf,
+        factorValue: paper!.strategy.marketValue,
+        benchmarkValue: paper!.mix.marketValue,
+      })
+    : null;
   const since = new Date(`${STRATEGY_INCEPTION_DATE}T00:00:00Z`).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
@@ -70,25 +96,17 @@ function AnnualizedAlphaTile({
   });
 
   return (
-    <div className="flex w-full shrink-0 flex-col items-center justify-center rounded-lg border border-border/70 bg-secondary/20 px-4 py-6 text-center lg:w-48 lg:self-center">
-      <p className="label-caps">Annualized alpha</p>
+    <div className="flex w-full shrink-0 flex-col justify-center rounded-lg border border-border/70 bg-secondary/20 px-4 py-5 lg:w-56 lg:self-center">
+      <p className="label-caps text-center">Annualized alpha</p>
       {isPending ? (
-        <div className="mt-3 h-10 w-28 animate-pulse rounded-md bg-secondary/70" />
+        <div className="mt-3 h-16 animate-pulse rounded-md bg-secondary/70" />
       ) : (
-        <p
-          className={`mt-2 font-display text-4xl font-semibold tabular-nums tracking-tight ${
-            alpha === null
-              ? "text-muted-foreground"
-              : alpha >= 0
-                ? "text-positive"
-                : "text-negative"
-          }`}
-        >
-          {pct(alpha, 1)}
-        </p>
+        <div className="mt-3 space-y-2">
+          <AlphaLine label="vs VOO" value={vsVoo} />
+          <AlphaLine label="vs mix" value={vsMix} />
+        </div>
       )}
-      <p className="mt-3 text-xs leading-snug text-muted-foreground">Factor DCA vs VOO</p>
-      <p className="mt-1 text-xs text-muted-foreground">Since {since}</p>
+      <p className="mt-3 text-center text-xs text-muted-foreground">Since {since}</p>
     </div>
   );
 }
@@ -283,9 +301,11 @@ function taxTone(kind: "gain" | "loss" | "signed", value: number): string {
 function TaxComparison({
   factor,
   voo,
+  mix,
 }: {
   factor: SleeveTaxPosition | undefined;
   voo: SleeveTaxPosition | undefined;
+  mix: SleeveTaxPosition | undefined;
 }) {
   const empty: SleeveTaxPosition = {
     realizedGains: 0,
@@ -298,40 +318,56 @@ function TaxComparison({
   };
   const factorBook = factor ?? empty;
   const vooBook = voo ?? empty;
+  const mixBook = mix ?? empty;
+  const books = [
+    { label: "Factor", book: factorBook },
+    { label: "VOO", book: vooBook },
+    { label: "Mix", book: mixBook },
+  ];
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[520px] text-sm">
+      <table className="w-full min-w-[760px] text-sm">
         <thead>
           <tr className="border-b border-border text-left">
             <th className="label-caps py-2.5 pr-4">Cumulative position</th>
-            <th className="label-caps py-2.5 pr-4 text-right">Factor</th>
-            <th className="label-caps py-2.5 pr-4 text-right">VOO</th>
-            <th className="label-caps py-2.5 text-right">Factor − VOO</th>
+            {books.map((column) => (
+              <th key={column.label} className="label-caps py-2.5 pr-4 text-right">
+                {column.label}
+              </th>
+            ))}
+            <th className="label-caps py-2.5 pr-4 text-right">Factor − VOO</th>
+            <th className="label-caps py-2.5 text-right">Factor − Mix</th>
           </tr>
         </thead>
         <tbody>
           {TAX_ROWS.map((row) => {
             const factorValue = factorBook[row.key];
             const vooValue = vooBook[row.key];
-            const delta = factorValue - vooValue;
+            const mixValue = mixBook[row.key];
             return (
               <tr key={row.key} className="border-b border-border/50 last:border-0">
                 <td className="py-2.5 pr-4 text-muted-foreground">{row.label}</td>
+                {books.map((column) => {
+                  const value = column.book[row.key];
+                  return (
+                    <td
+                      key={column.label}
+                      className={`py-2.5 pr-4 text-right font-mono tabular-nums ${taxTone(row.kind, value)}`}
+                    >
+                      {usd(value)}
+                    </td>
+                  );
+                })}
                 <td
-                  className={`py-2.5 pr-4 text-right font-mono tabular-nums ${taxTone(row.kind, factorValue)}`}
+                  className={`py-2.5 pr-4 text-right font-mono tabular-nums ${taxTone("signed", factorValue - vooValue)}`}
                 >
-                  {usd(factorValue)}
+                  {usd(factorValue - vooValue)}
                 </td>
                 <td
-                  className={`py-2.5 pr-4 text-right font-mono tabular-nums ${taxTone(row.kind, vooValue)}`}
+                  className={`py-2.5 text-right font-mono tabular-nums ${taxTone("signed", factorValue - mixValue)}`}
                 >
-                  {usd(vooValue)}
-                </td>
-                <td
-                  className={`py-2.5 text-right font-mono tabular-nums ${taxTone("signed", delta)}`}
-                >
-                  {usd(delta)}
+                  {usd(factorValue - mixValue)}
                 </td>
               </tr>
             );
@@ -352,6 +388,7 @@ function PaperPortfolioPanels({
   const strategyTone =
     (paper?.strategy.returnPct ?? 0) >= 0 ? ("positive" as const) : ("negative" as const);
   const vooTone = (paper?.voo.returnPct ?? 0) >= 0 ? ("positive" as const) : ("negative" as const);
+  const mixTone = (paper?.mix.returnPct ?? 0) >= 0 ? ("positive" as const) : ("negative" as const);
   const ledgerTrades = taxLedgerTrades(paper?.recentTrades ?? []);
 
   return (
@@ -375,11 +412,12 @@ function PaperPortfolioPanels({
           run and continues through every later weekly run. Each run allocates $
           {WEEKLY_CONTRIBUTION_USD.toLocaleString()} at the next session open using that week&apos;s
           target weights (3-month tax-aware holds). Dividends are reinvested in the same ETF on the
-          ex-date. The VOO sleeve invests the same cash on the same dates and reinvests the same
-          way.
+          ex-date. The VOO sleeve invests the same cash on the same dates. The asset-mix sleeve
+          invests that same cash in VOO, IJH, IJR, VEA, BND, TLT, and PDBC at the week&apos;s
+          category weights, and rebalances to those weights.
         </p>
 
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid gap-4 xl:grid-cols-3">
           <div>
             <p className="label-caps mb-3">Factor strategy</p>
             <div className="grid gap-3 sm:grid-cols-3">
@@ -420,12 +458,32 @@ function PaperPortfolioPanels({
               )}
             </div>
           </div>
+          <div>
+            <p className="label-caps mb-3">Asset-mix benchmark</p>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {isPending ? (
+                Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="h-24 animate-pulse rounded-lg bg-secondary/40" />
+                ))
+              ) : (
+                <>
+                  <MetricTile
+                    label="Cumulative return"
+                    value={pct(paper?.mix.returnPct)}
+                    tone={mixTone}
+                  />
+                  <MetricTile label="Portfolio value" value={usd(paper?.mix.marketValue)} />
+                  <MetricTile label="Cost basis" value={usd(paper?.mix.costBasis)} />
+                </>
+              )}
+            </div>
+          </div>
         </div>
 
         {!isPending && paper?.weeklySeries?.length ? (
           <div className="mt-6 overflow-x-auto">
             <p className="label-caps mb-3">Cumulative return by model run</p>
-            <table className="w-full min-w-[760px] text-sm">
+            <table className="w-full min-w-[1100px] text-sm">
               <thead>
                 <tr className="border-b border-border text-left">
                   <th className="label-caps py-2.5 pr-4">Run date</th>
@@ -435,7 +493,10 @@ function PaperPortfolioPanels({
                   <th className="label-caps py-2.5 pr-4 text-right">Strategy return</th>
                   <th className="label-caps py-2.5 pr-4 text-right">VOO value</th>
                   <th className="label-caps py-2.5 pr-4 text-right">VOO return</th>
-                  <th className="label-caps py-2.5 text-right">Alpha</th>
+                  <th className="label-caps py-2.5 pr-4 text-right">vs VOO</th>
+                  <th className="label-caps py-2.5 pr-4 text-right">Mix value</th>
+                  <th className="label-caps py-2.5 pr-4 text-right">Mix return</th>
+                  <th className="label-caps py-2.5 text-right">vs Mix</th>
                 </tr>
               </thead>
               <tbody>
@@ -469,11 +530,28 @@ function PaperPortfolioPanels({
                       {pct(row.vooReturnPct)}
                     </td>
                     <td
-                      className={`py-2.5 text-right font-mono tabular-nums ${
+                      className={`py-2.5 pr-4 text-right font-mono tabular-nums ${
                         row.alphaPct >= 0 ? "text-positive" : "text-negative"
                       }`}
                     >
                       {pct(row.alphaPct)}
+                    </td>
+                    <td className="py-2.5 pr-4 text-right font-mono tabular-nums">
+                      {usd(row.mixValue)}
+                    </td>
+                    <td
+                      className={`py-2.5 pr-4 text-right font-mono tabular-nums ${
+                        row.mixReturnPct >= 0 ? "text-positive" : "text-negative"
+                      }`}
+                    >
+                      {pct(row.mixReturnPct)}
+                    </td>
+                    <td
+                      className={`py-2.5 text-right font-mono tabular-nums ${
+                        row.mixAlphaPct >= 0 ? "text-positive" : "text-negative"
+                      }`}
+                    >
+                      {pct(row.mixAlphaPct)}
                     </td>
                   </tr>
                 ))}
@@ -492,13 +570,14 @@ function PaperPortfolioPanels({
           </span>
         </div>
         <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
-          Factor and VOO are separate books. Net unrealized equals that sleeve&apos;s market value
-          minus its cost basis. Distributions are taxable income and are not capital gains.
+          Factor, VOO, and the asset mix are separate books. Net unrealized equals that
+          sleeve&apos;s market value minus its cost basis. Distributions are taxable income and are
+          not capital gains. The trade list below is the factor book only.
         </p>
         {isPending ? (
           <div className="h-64 animate-pulse rounded-lg bg-secondary/40" />
         ) : (
-          <TaxComparison factor={paper?.tax.factor} voo={paper?.tax.voo} />
+          <TaxComparison factor={paper?.tax.factor} voo={paper?.tax.voo} mix={paper?.tax.mix} />
         )}
         {!isPending && ledgerTrades.length ? (
           <div className="mt-6 overflow-x-auto">
