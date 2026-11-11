@@ -1,21 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import {
-  ArrowUpRight,
-  Crown,
-  Landmark,
-  PiggyBank,
-  Shield,
-  Trophy,
-  Wallet,
-} from "lucide-react";
+import { ArrowUpRight, Crown, Landmark, PiggyBank, Shield, Trophy, Wallet } from "lucide-react";
 
 import { getAlpacaPaperLedger } from "@/lib/alpaca.functions";
 import { fetchCashManagerYields, type CashFund } from "@/lib/cash-manager";
 import {
   CASH_MARGIN_RESERVE_USD,
   ETF_TARGET_CAPITAL_USD,
-  OPTIONS_PAPER_CAPITAL_USD,
   cashPartitions,
 } from "@/lib/capital-book";
 import { getPaperPortfolio } from "@/lib/paper-portfolio.functions";
@@ -96,9 +87,9 @@ function LeaderboardRow({ fund, rank, isTop }: { fund: CashFund; rank: number; i
       <td className="py-3.5 pr-4 text-sm text-muted-foreground">{fund.fund_name}</td>
       <td className="py-3.5 pr-4">
         <span
-          className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-medium ring-1 ${
-            categoryTint(fund.category)
-          }`}
+          className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-medium ring-1 ${categoryTint(
+            fund.category,
+          )}`}
         >
           {fund.category}
         </span>
@@ -177,15 +168,15 @@ export function CashManagerTab() {
   const loading = yields.isPending;
 
   const etfFloat = paper.data?.etfFloatRemaining ?? ETF_TARGET_CAPITAL_USD;
-  const optionsBp = alpaca.data?.account?.optionsBuyingPower;
-  const optionsBpUsed =
-    alpaca.data?.live && optionsBp != null
-      ? Math.max(0, OPTIONS_PAPER_CAPITAL_USD - Math.min(OPTIONS_PAPER_CAPITAL_USD, optionsBp))
-      : 0;
+  const feed = alpaca.data?.live ? (alpaca.data.optionsFeed ?? null) : null;
   const partitions = cashPartitions({
     etfFloatRemaining: etfFloat,
-    optionsBpUsed,
+    optionsBpUsed: feed ? feed.bpUsed : null,
   });
+  const bpText =
+    partitions.optionsBpUsedUsd == null ? "Not live" : usd(partitions.optionsBpUsedUsd);
+  const freeText =
+    partitions.freeCollateralUsd == null ? "Not live" : usd(partitions.freeCollateralUsd);
 
   return (
     <div className="space-y-6">
@@ -207,18 +198,20 @@ export function CashManagerTab() {
             label="Pledged options reserve"
             value={usd(partitions.pledgedReserveUsd)}
             note={
-              alpaca.data?.live
-                ? `${usd(partitions.optionsBpUsedUsd)} modeled sleeve BP used · Alpaca live`
-                : `${usd(partitions.optionsBpUsedUsd)} BP used · awaiting Alpaca secrets`
+              alpaca.isPending
+                ? "Loading options buying power"
+                : partitions.optionsBpUsedUsd == null
+                  ? "BP used is not live yet"
+                  : `${bpText} defined-risk BP used`
             }
             loading={alpaca.isPending}
           />
           <MetricCard
             icon={Wallet}
             label="Free collateral"
-            value={usd(partitions.freeCollateralUsd)}
-            note="Reserve minus options BP used"
-            loading={false}
+            value={freeText}
+            note="Reserve minus defined-risk BP used"
+            loading={alpaca.isPending}
           />
           <MetricCard
             icon={PiggyBank}
@@ -268,11 +261,7 @@ export function CashManagerTab() {
             Cash Yield Leaderboard — Short-Term Treasury &amp; Money Market Funds
           </h2>
           <span className="label-caps ml-auto">
-            {loading
-              ? "Loading"
-              : yields.data?.live
-                ? `Live · ${yields.data.asOf}`
-                : "Unavailable"}
+            {loading ? "Loading" : yields.data?.live ? `Live · ${yields.data.asOf}` : "Unavailable"}
           </span>
         </div>
 
@@ -299,12 +288,7 @@ export function CashManagerTab() {
               </thead>
               <tbody>
                 {funds.map((fund, i) => (
-                  <LeaderboardRow
-                    key={fund.id}
-                    fund={fund}
-                    rank={i + 1}
-                    isTop={i === 0}
-                  />
+                  <LeaderboardRow key={fund.id} fund={fund} rank={i + 1} isTop={i === 0} />
                 ))}
               </tbody>
             </table>

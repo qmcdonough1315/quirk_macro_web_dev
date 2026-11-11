@@ -6,6 +6,7 @@ import { getAlpacaPaperLedger } from "@/lib/alpaca.functions";
 import {
   CASH_MARGIN_RESERVE_USD,
   OPTIONS_PAPER_CAPITAL_USD,
+  cashPartitions,
 } from "@/lib/capital-book";
 
 const usd = (n: number | null | undefined, digits = 0) =>
@@ -30,17 +31,21 @@ export function OptionsBookTab() {
   const account = ledger.data?.account;
   const optionPositions = ledger.data?.optionPositions ?? [];
   const live = Boolean(ledger.data?.live);
-  const optionsBp = account?.optionsBuyingPower ?? null;
-  const bpUsedEstimate =
-    live && account
-      ? Math.max(0, OPTIONS_PAPER_CAPITAL_USD - Math.min(OPTIONS_PAPER_CAPITAL_USD, optionsBp ?? 0))
-      : null;
-  // Prefer cash-reserve headroom view: remaining options BP vs $25k sleeve.
-  const headroom =
-    live && optionsBp != null
-      ? Math.min(CASH_MARGIN_RESERVE_USD, optionsBp)
-      : CASH_MARGIN_RESERVE_USD;
-  const openUnrealized = optionPositions.reduce((s, p) => s + p.unrealizedPl, 0);
+  const feed = live ? (ledger.data?.optionsFeed ?? null) : null;
+  const partitions = cashPartitions({
+    etfFloatRemaining: 0,
+    optionsBpUsed: feed ? feed.bpUsed : null,
+  });
+  const cell = (value: number | null | undefined, digits = 0) => {
+    if (ledger.isPending) return "…";
+    if (!live || value == null || !Number.isFinite(value)) return "Not live";
+    return usd(value, digits);
+  };
+  const betaText = (value: number | null | undefined) => {
+    if (ledger.isPending) return "…";
+    if (!live || value == null || !Number.isFinite(value)) return "Not live";
+    return `${value > 0 ? "+" : ""}${value.toFixed(1)}`;
+  };
 
   return (
     <div className="space-y-6">
@@ -56,48 +61,136 @@ export function OptionsBookTab() {
           </span>
         </div>
         <p className="mb-5 max-w-3xl text-sm text-muted-foreground">
-          Live sleeve from Alpaca paper (`paper-api.alpaca.markets`). Buying power is capped at{" "}
-          {usd(OPTIONS_PAPER_CAPITAL_USD)} for our mandate; the {usd(CASH_MARGIN_RESERVE_USD)} cash
-          reserve is the stress buffer. Strategy gates remain below.
+          Open spreads, marks, and P&amp;L come from Alpaca paper fills and positions. Buying power
+          used is defined-risk margin, capped by the {usd(OPTIONS_PAPER_CAPITAL_USD)} sleeve against
+          the {usd(CASH_MARGIN_RESERVE_USD)} cash reserve. Strategy gates remain below.
         </p>
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
           <div className="rounded-lg border border-border/70 bg-secondary/20 p-4">
-            <p className="label-caps">Options buying power</p>
+            <p className="label-caps">BP used</p>
             <p className="mt-2 font-display text-2xl font-semibold tabular-nums">
-              {ledger.isPending ? "…" : live ? usd(optionsBp) : "Not live"}
+              {cell(feed?.bpUsed)}
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
               {live
-                ? `Account equity ${usd(account?.equity)} · cash ${usd(account?.cash)}`
+                ? `Headroom ${cell(partitions.freeCollateralUsd)} · Alpaca options BP ${usd(account?.optionsBuyingPower)}`
                 : "Add ALPACA_API_KEY_ID + SECRET in Cursor secrets"}
             </p>
           </div>
           <div className="rounded-lg border border-border/70 bg-secondary/20 p-4">
-            <p className="label-caps">Margin headroom (modeled)</p>
-            <p
-              className={`mt-2 font-display text-2xl font-semibold tabular-nums ${
-                live ? "text-positive" : "text-muted-foreground"
-              }`}
-            >
-              {ledger.isPending ? "…" : usd(headroom)}
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Min of reserve and Alpaca options BP
-              {bpUsedEstimate != null ? ` · sleeve used ~${usd(bpUsedEstimate)}` : ""}
-            </p>
-          </div>
-          <div className="rounded-lg border border-border/70 bg-secondary/20 p-4">
-            <p className="label-caps">Open option positions</p>
+            <p className="label-caps">Open spreads</p>
             <p className="mt-2 font-display text-2xl font-semibold tabular-nums">
-              {ledger.isPending ? "…" : live ? String(optionPositions.length) : "Not live"}
+              {ledger.isPending ? "…" : live ? String(feed?.spreads.length ?? 0) : "Not live"}
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
               {live
-                ? `Unrealized ${usd(openUnrealized, 2)} · ${ledger.data?.equityPositions.length ?? 0} equity lots`
-                : (ledger.data?.notes[0] ?? "Waiting for Alpaca")}
+                ? `${optionPositions.length} legs · max loss ${cell(feed?.maxLoss)}`
+                : "Waiting for Alpaca"}
             </p>
           </div>
+          <div className="rounded-lg border border-border/70 bg-secondary/20 p-4">
+            <p className="label-caps">Unrealized P&amp;L</p>
+            <p
+              className={`mt-2 font-display text-2xl font-semibold tabular-nums ${
+                live && (feed?.unrealizedPl ?? 0) < 0
+                  ? "text-negative"
+                  : live && (feed?.unrealizedPl ?? 0) > 0
+                    ? "text-positive"
+                    : "text-muted-foreground"
+              }`}
+            >
+              {cell(feed?.unrealizedPl, 2)}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">Marked from open legs</p>
+          </div>
+          <div className="rounded-lg border border-border/70 bg-secondary/20 p-4">
+            <p className="label-caps">Realized premium</p>
+            <p
+              className={`mt-2 font-display text-2xl font-semibold tabular-nums ${
+                live && (feed?.realizedPl ?? 0) < 0
+                  ? "text-negative"
+                  : live && (feed?.realizedPl ?? 0) > 0
+                    ? "text-positive"
+                    : "text-muted-foreground"
+              }`}
+            >
+              {cell(feed?.realizedPl, 2)}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">FIFO from option fills</p>
+          </div>
+          <div className="rounded-lg border border-border/70 bg-secondary/20 p-4">
+            <p className="label-caps">β-weighted Δ</p>
+            <p className="mt-2 font-display text-2xl font-semibold tabular-nums text-muted-foreground">
+              {betaText(feed?.betaWeightedDelta)}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">SPY-equivalent shares</p>
+          </div>
         </div>
+
+        {live ? (
+          <div className="mt-5 overflow-x-auto rounded-lg border border-border/70">
+            <table className="w-full min-w-[960px] text-left text-sm">
+              <thead className="border-b border-border/70 bg-secondary/30 text-xs uppercase tracking-wider text-muted-foreground">
+                <tr>
+                  <th className="px-3 py-2.5 font-medium">Structure</th>
+                  <th className="px-3 py-2.5 font-medium">Underlying</th>
+                  <th className="px-3 py-2.5 font-medium">Expiry</th>
+                  <th className="px-3 py-2.5 font-medium text-right">Qty</th>
+                  <th className="px-3 py-2.5 font-medium text-right">Entry credit</th>
+                  <th className="px-3 py-2.5 font-medium text-right">Mark</th>
+                  <th className="px-3 py-2.5 font-medium text-right">Max loss</th>
+                  <th className="px-3 py-2.5 font-medium text-right">BP</th>
+                  <th className="px-3 py-2.5 font-medium text-right">Unrealized</th>
+                  <th className="px-3 py-2.5 font-medium text-right">βΔ</th>
+                </tr>
+              </thead>
+              <tbody>
+                {feed?.spreads.length ? (
+                  feed.spreads.map((spread) => (
+                    <tr key={spread.id} className="border-b border-border/40 last:border-0">
+                      <td className="px-3 py-2.5 font-medium">{spread.structure}</td>
+                      <td className="px-3 py-2.5 font-mono text-xs">{spread.underlying}</td>
+                      <td className="px-3 py-2.5 font-mono text-xs">{spread.expiry || "—"}</td>
+                      <td className="px-3 py-2.5 text-right font-mono tabular-nums">
+                        {spread.contracts}
+                      </td>
+                      <td className="px-3 py-2.5 text-right font-mono tabular-nums">
+                        {usd(spread.netCredit, 2)}
+                      </td>
+                      <td className="px-3 py-2.5 text-right font-mono tabular-nums">
+                        {usd(spread.markCredit, 2)}
+                      </td>
+                      <td className="px-3 py-2.5 text-right font-mono tabular-nums">
+                        {spread.maxLoss == null ? "Not live" : usd(spread.maxLoss, 2)}
+                      </td>
+                      <td className="px-3 py-2.5 text-right font-mono tabular-nums">
+                        {spread.bpUsed == null ? "Not live" : usd(spread.bpUsed, 2)}
+                      </td>
+                      <td
+                        className={`px-3 py-2.5 text-right font-mono tabular-nums ${
+                          spread.unrealizedPl >= 0 ? "text-positive" : "text-negative"
+                        }`}
+                      >
+                        {usd(spread.unrealizedPl, 2)}
+                      </td>
+                      <td className="px-3 py-2.5 text-right font-mono tabular-nums">
+                        {spread.betaWeightedDelta == null
+                          ? "Not live"
+                          : `${spread.betaWeightedDelta > 0 ? "+" : ""}${spread.betaWeightedDelta.toFixed(1)}`}
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={10} className="px-3 py-4 text-sm text-muted-foreground">
+                      No open spreads.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
 
         {live && optionPositions.length ? (
           <div className="mt-5 overflow-x-auto rounded-lg border border-border/70">
@@ -114,7 +207,10 @@ export function OptionsBookTab() {
               </thead>
               <tbody>
                 {optionPositions.map((p) => (
-                  <tr key={p.assetId || p.symbol} className="border-b border-border/40 last:border-0">
+                  <tr
+                    key={p.assetId || p.symbol}
+                    className="border-b border-border/40 last:border-0"
+                  >
                     <td className="px-3 py-2.5 font-mono text-xs font-semibold">{p.symbol}</td>
                     <td className="px-3 py-2.5 text-right font-mono tabular-nums">{p.qty}</td>
                     <td className="px-3 py-2.5 text-right font-mono tabular-nums">
@@ -140,10 +236,13 @@ export function OptionsBookTab() {
           </div>
         ) : null}
 
+        {live && feed?.notes.length ? (
+          <p className="mt-4 text-xs text-muted-foreground">{feed.notes.join(" · ")}</p>
+        ) : null}
+
         {!live && !ledger.isPending ? (
           <p className="mt-4 text-xs text-muted-foreground">
-            {(ledger.data?.notes ?? []).join(" · ") ||
-              "Alpaca paper ledger not connected yet."}
+            {(ledger.data?.notes ?? []).join(" · ") || "Alpaca paper ledger not connected yet."}
           </p>
         ) : null}
       </section>
