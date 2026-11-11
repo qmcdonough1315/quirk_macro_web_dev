@@ -14,8 +14,16 @@ import {
 } from "lucide-react";
 
 import { fetchFactorBetaData, type FactorBetaRow, type PortfolioHolding } from "@/lib/factor-beta";
-import { getPaperPortfolio, type PaperPortfolioSnapshot } from "@/lib/paper-portfolio.functions";
-import { STRATEGY_INCEPTION_DATE, WEEKLY_CONTRIBUTION_USD } from "@/lib/paper-portfolio-rules";
+import {
+  getPaperPortfolio,
+  type PaperPortfolioSnapshot,
+  type SleeveTaxPosition,
+} from "@/lib/paper-portfolio.functions";
+import {
+  STRATEGY_INCEPTION_DATE,
+  WEEKLY_CONTRIBUTION_USD,
+  taxLedgerTrades,
+} from "@/lib/paper-portfolio-rules";
 import { RegimeRead } from "@/components/dashboard/RegimeRead";
 
 const pct = (n: number | null | undefined, digits = 2) =>
@@ -201,6 +209,88 @@ function MetricTile({
   );
 }
 
+const TAX_ROWS: {
+  key: keyof SleeveTaxPosition;
+  label: string;
+  kind: "gain" | "loss" | "signed";
+}[] = [
+  { key: "realizedGains", label: "Realized gains", kind: "gain" },
+  { key: "realizedLosses", label: "Realized losses", kind: "loss" },
+  { key: "netRealized", label: "Net realized", kind: "signed" },
+  { key: "unrealizedGains", label: "Unrealized gains", kind: "gain" },
+  { key: "unrealizedLosses", label: "Unrealized losses", kind: "loss" },
+  { key: "netUnrealized", label: "Net unrealized", kind: "signed" },
+  { key: "distributions", label: "Distributions", kind: "gain" },
+];
+
+function taxTone(kind: "gain" | "loss" | "signed", value: number): string {
+  if (kind === "loss") return "text-negative";
+  if (kind === "gain") return "text-positive";
+  return value >= 0 ? "text-positive" : "text-negative";
+}
+
+function TaxComparison({
+  factor,
+  voo,
+}: {
+  factor: SleeveTaxPosition | undefined;
+  voo: SleeveTaxPosition | undefined;
+}) {
+  const empty: SleeveTaxPosition = {
+    realizedGains: 0,
+    realizedLosses: 0,
+    netRealized: 0,
+    unrealizedGains: 0,
+    unrealizedLosses: 0,
+    netUnrealized: 0,
+    distributions: 0,
+  };
+  const factorBook = factor ?? empty;
+  const vooBook = voo ?? empty;
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[520px] text-sm">
+        <thead>
+          <tr className="border-b border-border text-left">
+            <th className="label-caps py-2.5 pr-4">Cumulative position</th>
+            <th className="label-caps py-2.5 pr-4 text-right">Factor</th>
+            <th className="label-caps py-2.5 pr-4 text-right">VOO</th>
+            <th className="label-caps py-2.5 text-right">Factor − VOO</th>
+          </tr>
+        </thead>
+        <tbody>
+          {TAX_ROWS.map((row) => {
+            const factorValue = factorBook[row.key];
+            const vooValue = vooBook[row.key];
+            const delta = factorValue - vooValue;
+            return (
+              <tr key={row.key} className="border-b border-border/50 last:border-0">
+                <td className="py-2.5 pr-4 text-muted-foreground">{row.label}</td>
+                <td
+                  className={`py-2.5 pr-4 text-right font-mono tabular-nums ${taxTone(row.kind, factorValue)}`}
+                >
+                  {usd(factorValue)}
+                </td>
+                <td
+                  className={`py-2.5 pr-4 text-right font-mono tabular-nums ${taxTone(row.kind, vooValue)}`}
+                >
+                  {usd(vooValue)}
+                </td>
+                <td
+                  className={`py-2.5 text-right font-mono tabular-nums ${taxTone("signed", delta)}`}
+                >
+                  {usd(delta)}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function PaperPortfolioPanels({
   paper,
   isPending,
@@ -211,7 +301,7 @@ function PaperPortfolioPanels({
   const strategyTone =
     (paper?.strategy.returnPct ?? 0) >= 0 ? ("positive" as const) : ("negative" as const);
   const vooTone = (paper?.voo.returnPct ?? 0) >= 0 ? ("positive" as const) : ("negative" as const);
-  const netTax = paper?.tax.netTaxable ?? 0;
+  const ledgerTrades = taxLedgerTrades(paper?.recentTrades ?? []);
 
   return (
     <>
@@ -233,8 +323,9 @@ function PaperPortfolioPanels({
           Catch-up replay starts with the {paper?.inceptionDate ?? STRATEGY_INCEPTION_DATE} model
           run and continues through every later weekly run. Each run allocates $
           {WEEKLY_CONTRIBUTION_USD.toLocaleString()} at the next session open using that week&apos;s
-          target weights (3-month tax-aware holds). The VOO sleeve invests the same cash on the same
-          dates.
+          target weights (3-month tax-aware holds). Dividends are reinvested in the same ETF on the
+          ex-date. The VOO sleeve invests the same cash on the same dates and reinvests the same
+          way.
         </p>
 
         <div className="grid gap-4 lg:grid-cols-2">
@@ -349,42 +440,16 @@ function PaperPortfolioPanels({
             {paper ? `${paper.openLots} open factor lots` : "—"}
           </span>
         </div>
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-          {isPending ? (
-            Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="h-24 animate-pulse rounded-lg bg-secondary/40" />
-            ))
-          ) : (
-            <>
-              <MetricTile
-                label="Cum. realized gains"
-                value={usd(paper?.tax.cumulativeRealizedGains)}
-                tone="positive"
-              />
-              <MetricTile
-                label="Cum. realized losses"
-                value={usd(paper?.tax.cumulativeRealizedLosses)}
-                tone="negative"
-              />
-              <MetricTile
-                label="Net taxable"
-                value={usd(netTax)}
-                tone={netTax >= 0 ? "positive" : "negative"}
-              />
-              <MetricTile
-                label="Cum. unrealized gains"
-                value={usd(paper?.tax.cumulativeUnrealizedGains)}
-                tone="positive"
-              />
-              <MetricTile
-                label="Cum. unrealized losses"
-                value={usd(paper?.tax.cumulativeUnrealizedLosses)}
-                tone="negative"
-              />
-            </>
-          )}
-        </div>
-        {!isPending && paper?.recentTrades?.length ? (
+        <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
+          Factor and VOO are separate books. Net unrealized equals that sleeve&apos;s market value
+          minus its cost basis. Distributions are taxable income and are not capital gains.
+        </p>
+        {isPending ? (
+          <div className="h-64 animate-pulse rounded-lg bg-secondary/40" />
+        ) : (
+          <TaxComparison factor={paper?.tax.factor} voo={paper?.tax.voo} />
+        )}
+        {!isPending && ledgerTrades.length ? (
           <div className="mt-6 overflow-x-auto">
             <table className="w-full min-w-[640px] text-sm">
               <thead>
@@ -398,7 +463,7 @@ function PaperPortfolioPanels({
                 </tr>
               </thead>
               <tbody>
-                {paper.recentTrades.map((t, i) => (
+                {ledgerTrades.map((t, i) => (
                   <tr
                     key={`${t.date}-${t.ticker}-${i}`}
                     className="border-b border-border/50 last:border-0"

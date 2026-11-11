@@ -2,12 +2,14 @@ import { createServerFn } from "@tanstack/react-start";
 
 import {
   simulatePaperPortfolio,
+  zeroSleeveTax,
   type PaperPortfolioSnapshot,
   type PaperWeeklyPoint,
+  type SleeveTaxPosition,
 } from "./paper-portfolio.server";
 import { STRATEGY_INCEPTION_DATE } from "./paper-portfolio-rules";
 
-export type { PaperPortfolioSnapshot, PaperWeeklyPoint };
+export type { PaperPortfolioSnapshot, PaperWeeklyPoint, SleeveTaxPosition };
 
 export const getPaperPortfolio = createServerFn({ method: "GET" }).handler(
   async (): Promise<PaperPortfolioSnapshot> => {
@@ -24,11 +26,8 @@ export const getPaperPortfolio = createServerFn({ method: "GET" }).handler(
         strategy: { marketValue: 0, costBasis: 0, returnPct: 0, cash: 0 },
         voo: { marketValue: 0, costBasis: 0, returnPct: 0, cash: 0 },
         tax: {
-          cumulativeRealizedGains: 0,
-          cumulativeRealizedLosses: 0,
-          netTaxable: 0,
-          cumulativeUnrealizedGains: 0,
-          cumulativeUnrealizedLosses: 0,
+          factor: zeroSleeveTax(),
+          voo: zeroSleeveTax(),
         },
         openLots: 0,
         recentTrades: [],

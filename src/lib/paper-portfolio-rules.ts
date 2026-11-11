@@ -99,6 +99,22 @@ export function diffDays(a: string, b: string): number {
   return Math.floor(ms / 86_400_000);
 }
 
+/** VOO benchmark DCA is not a factor tax lot. */
+export function isBenchmarkVooTrade(trade: { strategy?: string; reason?: string }): boolean {
+  return trade.strategy === "voo" || trade.reason === "weekly_voo_dca";
+}
+
+/** Newest factor-sleeve trades for the Tax Lot Ledger, excluding the VOO benchmark. */
+export function taxLedgerTrades<T extends { strategy?: string; reason?: string }>(
+  trades: T[],
+  limit = 12,
+): T[] {
+  return trades
+    .filter((trade) => !isBenchmarkVooTrade(trade))
+    .slice(-limit)
+    .reverse();
+}
+
 /** Next weekday on/after the day following `iso` (model run → next session). */
 export function nextBusinessDayAfter(iso: string): string {
   const d = new Date(`${iso}T00:00:00Z`);

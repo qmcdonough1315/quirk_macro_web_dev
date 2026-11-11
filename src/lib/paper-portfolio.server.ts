@@ -7,6 +7,8 @@
  *   3) Hold short-term winners for LTCG unless harvested losses can offset
  *   4) Dollar-cost average $1000 into the new target weights at next-session open
  *   5) Dollar-cost average $1000 into VOO on the same fill date (benchmark)
+ *   6) Reinvest dividends into the same ETF at the ex-date close, and apply splits
+ *      to share count and cost with no tax event
  */
 
 import { supabase } from "./supabase";
@@ -28,6 +30,7 @@ import {
   diffDays,
   identicalSet,
   nextBusinessDayAfter,
+  taxLedgerTrades,
 } from "./paper-portfolio-rules";
 
 export interface PaperWeeklyPoint {
@@ -62,16 +65,35 @@ export interface PaperPortfolioSnapshot {
     cash: number;
   };
   tax: {
-    cumulativeRealizedGains: number;
-    cumulativeRealizedLosses: number;
-    netTaxable: number;
-    cumulativeUnrealizedGains: number;
-    cumulativeUnrealizedLosses: number;
+    factor: SleeveTaxPosition;
+    voo: SleeveTaxPosition;
   };
   openLots: number;
   recentTrades: PaperTrade[];
   weeklySeries: PaperWeeklyPoint[];
   notes: string[];
+}
+
+export interface SleeveTaxPosition {
+  realizedGains: number;
+  realizedLosses: number;
+  netRealized: number;
+  unrealizedGains: number;
+  unrealizedLosses: number;
+  netUnrealized: number;
+  distributions: number;
+}
+
+export function zeroSleeveTax(): SleeveTaxPosition {
+  return {
+    realizedGains: 0,
+    realizedLosses: 0,
+    netRealized: 0,
+    unrealizedGains: 0,
+    unrealizedLosses: 0,
+    netUnrealized: 0,
+    distributions: 0,
+  };
 }
 
 export interface PaperTrade {
@@ -111,10 +133,73 @@ interface SimState {
   cumRealizedLosses: number;
   cashFactor: number;
   cashVoo: number;
+  /** Dividend cash waiting to be reinvested in the same ticker, keyed by ticker. */
+  dripFactor: Record<string, number>;
+  dripVoo: Record<string, number>;
+  distributionsFactor: number;
+  distributionsVoo: number;
   notes: string[];
 }
 
 type WeightMap = Record<string, number>;
+
+interface QuoteBar {
+  open: number;
+  close: number;
+}
+
+interface DividendEvent {
+  date: string;
+  amount: number;
+}
+
+interface SplitEvent {
+  date: string;
+  ratio: number;
+}
+
+interface DividendCredit {
+  strategy: "factor" | "voo";
+  ticker: string;
+  dollars: number;
+}
+
+export interface MarketData {
+  bars: Map<string, Map<string, QuoteBar>>;
+  dividends: Map<string, DividendEvent[]>;
+  splits: Map<string, SplitEvent[]>;
+}
+
+function emptyMarket(): MarketData {
+  return { bars: new Map(), dividends: new Map(), splits: new Map() };
+}
+
+function isoDateFromUnix(seconds: number): string {
+  return new Date(seconds * 1000).toISOString().slice(0, 10);
+}
+
+function parseSplitRatio(raw: {
+  numerator?: number;
+  denominator?: number;
+  splitRatio?: number | string;
+}): number | null {
+  if (typeof raw.splitRatio === "number" && Number.isFinite(raw.splitRatio) && raw.splitRatio > 0) {
+    return raw.splitRatio;
+  }
+  if (typeof raw.splitRatio === "string" && raw.splitRatio.includes(":")) {
+    const [num, den] = raw.splitRatio.split(":").map((part) => Number(part));
+    if (num > 0 && den > 0) return num / den;
+  }
+  if (
+    typeof raw.numerator === "number" &&
+    typeof raw.denominator === "number" &&
+    raw.numerator > 0 &&
+    raw.denominator > 0
+  ) {
+    return raw.numerator / raw.denominator;
+  }
+  return null;
+}
 
 function toNumber(v: unknown): number | null {
   if (typeof v === "number" && Number.isFinite(v)) return v;
@@ -122,10 +207,14 @@ function toNumber(v: unknown): number | null {
   return null;
 }
 
-async function fetchYahooOpens(tickers: string[], startISO: string, endISO: string) {
+async function fetchYahooOpens(
+  tickers: string[],
+  startISO: string,
+  endISO: string,
+): Promise<MarketData> {
   const start = Math.floor(Date.parse(`${startISO}T00:00:00Z`) / 1000) - 86_400;
   const end = Math.floor(Date.parse(`${endISO}T23:59:59Z`) / 1000) + 86_400;
-  const out = new Map<string, Map<string, { open: number; close: number }>>();
+  const market = emptyMarket();
 
   // Cap concurrency to keep Yahoo happy.
   const queue = [...new Set(tickers.map((t) => t.toUpperCase()))];
@@ -153,6 +242,18 @@ async function fetchYahooOpens(tickers: string[], startISO: string, endISO: stri
               indicators?: {
                 quote?: Array<{ open?: (number | null)[]; close?: (number | null)[] }>;
               };
+              events?: {
+                dividends?: Record<string, { amount?: number; date?: number }>;
+                splits?: Record<
+                  string,
+                  {
+                    numerator?: number;
+                    denominator?: number;
+                    splitRatio?: number | string;
+                    date?: number;
+                  }
+                >;
+              };
             }>;
           };
         };
@@ -160,7 +261,7 @@ async function fetchYahooOpens(tickers: string[], startISO: string, endISO: stri
         const ts = result?.timestamp ?? [];
         const opens = result?.indicators?.quote?.[0]?.open ?? [];
         const closes = result?.indicators?.quote?.[0]?.close ?? [];
-        const series = new Map<string, { open: number; close: number }>();
+        const series = new Map<string, QuoteBar>();
         for (let i = 0; i < ts.length; i++) {
           const open = opens[i];
           const close = closes[i];
@@ -170,7 +271,31 @@ async function fetchYahooOpens(tickers: string[], startISO: string, endISO: stri
           const date = new Date(ts[i]! * 1000).toISOString().slice(0, 10);
           series.set(date, { open, close: closePx });
         }
-        if (series.size) out.set(ticker, series);
+        if (series.size) market.bars.set(ticker, series);
+
+        const dividends: DividendEvent[] = [];
+        for (const event of Object.values(result?.events?.dividends ?? {})) {
+          const amount = event.amount;
+          const when = event.date;
+          if (typeof amount !== "number" || amount <= 0 || typeof when !== "number") continue;
+          dividends.push({ date: isoDateFromUnix(when), amount });
+        }
+        if (dividends.length) {
+          dividends.sort((a, b) => (a.date < b.date ? -1 : 1));
+          market.dividends.set(ticker, dividends);
+        }
+
+        const splits: SplitEvent[] = [];
+        for (const event of Object.values(result?.events?.splits ?? {})) {
+          const ratio = parseSplitRatio(event);
+          const when = event.date;
+          if (ratio == null || ratio === 1 || typeof when !== "number") continue;
+          splits.push({ date: isoDateFromUnix(when), ratio });
+        }
+        if (splits.length) {
+          splits.sort((a, b) => (a.date < b.date ? -1 : 1));
+          market.splits.set(ticker, splits);
+        }
       } catch {
         // Skip missing tickers; allocation residual stays in cash.
       }
@@ -178,11 +303,11 @@ async function fetchYahooOpens(tickers: string[], startISO: string, endISO: stri
   }
 
   await Promise.all(Array.from({ length: workers }, () => worker()));
-  return out;
+  return market;
 }
 
 function priceOnOrBefore(
-  series: Map<string, { open: number; close: number }> | undefined,
+  series: Map<string, QuoteBar> | undefined,
   date: string,
   field: "open" | "close",
 ): number | null {
@@ -282,23 +407,23 @@ function isWashRestricted(state: SimState, ticker: string, asOf: string): boolea
   return false;
 }
 
-function substituteCandidateUniverse(soldTicker: string, prices: PriceMapLike): string[] {
+function substituteCandidateUniverse(
+  soldTicker: string,
+  prices: Map<string, Map<string, QuoteBar>>,
+): string[] {
   const out = new Set<string>();
   const category = categoryForTicker(soldTicker);
   for (const peer of category ? (ETF_CATEGORY_PEERS[category] ?? []) : []) out.add(peer);
-  // Broaden search to every priced ETF we already downloaded.
   for (const ticker of prices.keys()) out.add(ticker);
   out.delete(soldTicker);
   return [...out];
 }
 
-type PriceMapLike = Map<string, Map<string, { open: number; close: number }>>;
-
 function chooseSubstitute(
   soldTicker: string,
   asOf: string,
   state: SimState,
-  prices: PriceMapLike,
+  prices: Map<string, Map<string, QuoteBar>>,
   currentWeights: WeightMap,
   betas: Map<string, BetaVector>,
 ): string | null {
@@ -313,7 +438,6 @@ function chooseSubstitute(
       if (banned.has(ticker)) return false;
       if (isWashRestricted(state, ticker, asOf)) return false;
       if (priceOnOrBefore(prices.get(ticker), asOf, "open") == null) return false;
-      // Soft-skip names already near the single-name cap in the live target book.
       if ((currentWeights[ticker] ?? 0) > 0.11) return false;
       return true;
     },
@@ -325,7 +449,6 @@ function chooseSubstitute(
     return pick.ticker;
   }
 
-  // Fallback: nearest beta ignoring the 11% soft skip, then category peer order.
   const relaxed = chooseBetaDistanceSubstitute({
     soldTicker,
     candidates,
@@ -393,7 +516,7 @@ function evaluateExits(
   state: SimState,
   asOf: string,
   currentWeights: WeightMap,
-  prices: Map<string, Map<string, { open: number; close: number }>>,
+  prices: Map<string, Map<string, QuoteBar>>,
   betas: Map<string, BetaVector>,
 ) {
   const candidates = state.lots.filter(
@@ -463,7 +586,7 @@ function deployContribution(
   runDate: string,
   fillDate: string,
   weights: WeightMap,
-  prices: Map<string, Map<string, { open: number; close: number }>>,
+  prices: Map<string, Map<string, QuoteBar>>,
 ) {
   let remaining = WEEKLY_CONTRIBUTION_USD + state.cashFactor;
   state.cashFactor = 0;
@@ -495,43 +618,200 @@ function deployContribution(
   }
 }
 
-function markToMarket(
+function dripBook(state: SimState, strategy: "factor" | "voo"): Record<string, number> {
+  return strategy === "voo" ? state.dripVoo : state.dripFactor;
+}
+
+function dripCashTotal(book: Record<string, number>): number {
+  return Object.values(book).reduce((sum, value) => sum + value, 0);
+}
+
+function applySplits(state: SimState, market: MarketData, date: string) {
+  for (const [ticker, events] of market.splits) {
+    for (const split of events) {
+      if (split.date !== date || split.ratio <= 0 || split.ratio === 1) continue;
+      for (const lot of state.lots) {
+        if (lot.ticker !== ticker || lot.openedOn >= date) continue;
+        lot.shares *= split.ratio;
+        lot.costPerShare /= split.ratio;
+      }
+    }
+  }
+}
+
+/** Lots opened before the ex-date earn the distribution, including a lot sold at that morning's open. */
+function dividendEntitlements(state: SimState, market: MarketData, date: string): DividendCredit[] {
+  const credits: DividendCredit[] = [];
+  for (const [ticker, events] of market.dividends) {
+    for (const dividend of events) {
+      if (dividend.date !== date || dividend.amount <= 0) continue;
+      let factorShares = 0;
+      let vooShares = 0;
+      for (const lot of state.lots) {
+        if (lot.ticker !== ticker || lot.openedOn >= date) continue;
+        if (lot.strategy === "voo") vooShares += lot.shares;
+        else factorShares += lot.shares;
+      }
+      if (factorShares > 0) {
+        credits.push({ strategy: "factor", ticker, dollars: factorShares * dividend.amount });
+      }
+      if (vooShares > 0) {
+        credits.push({ strategy: "voo", ticker, dollars: vooShares * dividend.amount });
+      }
+    }
+  }
+  return credits;
+}
+
+function creditDividends(state: SimState, credits: DividendCredit[]) {
+  for (const credit of credits) {
+    if (credit.dollars <= 0) continue;
+    const book = dripBook(state, credit.strategy);
+    book[credit.ticker] = (book[credit.ticker] ?? 0) + credit.dollars;
+    if (credit.strategy === "voo") state.distributionsVoo += credit.dollars;
+    else state.distributionsFactor += credit.dollars;
+  }
+}
+
+function deployDripCash(state: SimState, market: MarketData, date: string) {
+  for (const strategy of ["factor", "voo"] as const) {
+    const book = dripBook(state, strategy);
+    for (const ticker of Object.keys(book)) {
+      const dollars = book[ticker] ?? 0;
+      if (dollars <= 0) continue;
+      if (isWashRestricted(state, ticker, date)) continue;
+      const closePx = market.bars.get(ticker)?.get(date)?.close;
+      if (closePx == null || closePx <= 0) continue;
+      buy(state, strategy, ticker, dollars, date, date, closePx, "dividend_reinvest");
+      book[ticker] = 0;
+    }
+  }
+}
+
+function sessionDates(
+  market: MarketData,
+  fromExclusive: string,
+  through: string,
+  forceDate?: string,
+): string[] {
+  const dates = new Set<string>();
+  if (forceDate && forceDate > fromExclusive && forceDate <= through) dates.add(forceDate);
+  for (const series of market.bars.values()) {
+    for (const date of series.keys()) {
+      if (date > fromExclusive && date <= through) dates.add(date);
+    }
+  }
+  for (const events of market.dividends.values()) {
+    for (const event of events) {
+      if (event.date > fromExclusive && event.date <= through) dates.add(event.date);
+    }
+  }
+  for (const events of market.splits.values()) {
+    for (const event of events) {
+      if (event.date > fromExclusive && event.date <= through) dates.add(event.date);
+    }
+  }
+  return [...dates].sort();
+}
+
+function expireWash(state: SimState, date: string) {
+  for (const [ticker, soldOn] of [...state.wash.entries()]) {
+    if (diffDays(soldOn, date) >= WASH_SALE_DAYS) state.wash.delete(ticker);
+  }
+}
+
+function walkSessions(
   state: SimState,
-  asOf: string,
-  prices: Map<string, Map<string, { open: number; close: number }>>,
+  market: MarketData,
+  fromExclusive: string,
+  through: string,
+  fill: { runDate: string; fillDate: string; weights: WeightMap } | null,
+  betas: Map<string, BetaVector> = new Map(),
 ) {
-  let stratMv = state.cashFactor;
-  let stratCost = 0;
-  let vooMv = state.cashVoo;
-  let vooCost = 0;
-  let uGain = 0;
-  let uLoss = 0;
+  for (const date of sessionDates(market, fromExclusive, through, fill?.fillDate)) {
+    expireWash(state, date);
+    applySplits(state, market, date);
+    const entitled = dividendEntitlements(state, market, date);
+    if (fill && date === fill.fillDate) {
+      evaluateExits(state, date, fill.weights, market.bars, betas);
+      deployContribution(state, fill.runDate, date, fill.weights, market.bars);
+    }
+    creditDividends(state, entitled);
+    deployDripCash(state, market, date);
+  }
+}
+
+function markToMarket(state: SimState, asOf: string, bars: Map<string, Map<string, QuoteBar>>) {
+  const factorDrip = dripCashTotal(state.dripFactor);
+  const vooDrip = dripCashTotal(state.dripVoo);
+  let stratMv = state.cashFactor + factorDrip;
+  let stratCost = state.cashFactor + factorDrip;
+  let vooMv = state.cashVoo + vooDrip;
+  let vooCost = state.cashVoo + vooDrip;
+  let factorUnrealizedGain = 0;
+  let factorUnrealizedLoss = 0;
+  let vooUnrealizedGain = 0;
+  let vooUnrealizedLoss = 0;
 
   for (const lot of state.lots) {
     const px =
-      priceOnOrBefore(prices.get(lot.ticker), asOf, "close") ??
-      priceOnOrBefore(prices.get(lot.ticker), asOf, "open");
+      priceOnOrBefore(bars.get(lot.ticker), asOf, "close") ??
+      priceOnOrBefore(bars.get(lot.ticker), asOf, "open");
     const cost = lot.shares * lot.costPerShare;
     const mtm = px != null ? lot.shares * px : cost;
     const pnl = mtm - cost;
-    if (pnl >= 0) uGain += pnl;
-    else uLoss += -pnl;
     if (lot.strategy === "voo") {
       vooMv += mtm;
       vooCost += cost;
+      if (pnl >= 0) vooUnrealizedGain += pnl;
+      else vooUnrealizedLoss += -pnl;
     } else {
       stratMv += mtm;
       stratCost += cost;
+      if (pnl >= 0) factorUnrealizedGain += pnl;
+      else factorUnrealizedLoss += -pnl;
     }
   }
 
   return {
     stratMv,
-    stratCost: stratCost + state.cashFactor,
+    stratCost,
     vooMv,
-    vooCost: vooCost + state.cashVoo,
-    uGain,
-    uLoss,
+    vooCost,
+    factorUnrealizedGain,
+    factorUnrealizedLoss,
+    vooUnrealizedGain,
+    vooUnrealizedLoss,
+  };
+}
+
+function realizedFor(state: SimState, strategy: "factor" | "voo") {
+  let gains = 0;
+  let losses = 0;
+  for (const lot of state.closed) {
+    if (lot.strategy !== strategy) continue;
+    const pnl = lot.realizedPnl ?? 0;
+    if (pnl >= 0) gains += pnl;
+    else losses += -pnl;
+  }
+  return { gains, losses, net: gains - losses };
+}
+
+function sleeveTax(
+  state: SimState,
+  strategy: "factor" | "voo",
+  unrealizedGains: number,
+  unrealizedLosses: number,
+): SleeveTaxPosition {
+  const realized = realizedFor(state, strategy);
+  return {
+    realizedGains: realized.gains,
+    realizedLosses: realized.losses,
+    netRealized: realized.net,
+    unrealizedGains,
+    unrealizedLosses,
+    netUnrealized: unrealizedGains - unrealizedLosses,
+    distributions: strategy === "voo" ? state.distributionsVoo : state.distributionsFactor,
   };
 }
 
@@ -539,10 +819,10 @@ function summarize(
   state: SimState,
   asOf: string,
   runCount: number,
-  prices: Map<string, Map<string, { open: number; close: number }>>,
+  bars: Map<string, Map<string, QuoteBar>>,
   weeklySeries: PaperWeeklyPoint[],
 ): PaperPortfolioSnapshot {
-  const mtm = markToMarket(state, asOf, prices);
+  const mtm = markToMarket(state, asOf, bars);
   const totalContributed = runCount * WEEKLY_CONTRIBUTION_USD;
 
   return {
@@ -555,23 +835,20 @@ function summarize(
       marketValue: mtm.stratMv,
       costBasis: mtm.stratCost,
       returnPct: totalContributed > 0 ? (mtm.stratMv / totalContributed - 1) * 100 : 0,
-      cash: state.cashFactor,
+      cash: state.cashFactor + dripCashTotal(state.dripFactor),
     },
     voo: {
       marketValue: mtm.vooMv,
       costBasis: mtm.vooCost,
       returnPct: totalContributed > 0 ? (mtm.vooMv / totalContributed - 1) * 100 : 0,
-      cash: state.cashVoo,
+      cash: state.cashVoo + dripCashTotal(state.dripVoo),
     },
     tax: {
-      cumulativeRealizedGains: state.cumRealizedGains,
-      cumulativeRealizedLosses: state.cumRealizedLosses,
-      netTaxable: state.cumRealizedGains - state.cumRealizedLosses,
-      cumulativeUnrealizedGains: mtm.uGain,
-      cumulativeUnrealizedLosses: mtm.uLoss,
+      factor: sleeveTax(state, "factor", mtm.factorUnrealizedGain, mtm.factorUnrealizedLoss),
+      voo: sleeveTax(state, "voo", mtm.vooUnrealizedGain, mtm.vooUnrealizedLoss),
     },
     openLots: state.lots.filter((l) => l.strategy === "factor").length,
-    recentTrades: state.trades.slice(-12).reverse(),
+    recentTrades: taxLedgerTrades(state.trades),
     weeklySeries,
     notes: state.notes.slice(-8),
   };
@@ -587,11 +864,8 @@ function emptySnapshot(notes: string[]): PaperPortfolioSnapshot {
     strategy: { marketValue: 0, costBasis: 0, returnPct: 0, cash: 0 },
     voo: { marketValue: 0, costBasis: 0, returnPct: 0, cash: 0 },
     tax: {
-      cumulativeRealizedGains: 0,
-      cumulativeRealizedLosses: 0,
-      netTaxable: 0,
-      cumulativeUnrealizedGains: 0,
-      cumulativeUnrealizedLosses: 0,
+      factor: zeroSleeveTax(),
+      voo: zeroSleeveTax(),
     },
     openLots: 0,
     recentTrades: [],
@@ -620,12 +894,19 @@ export async function simulatePaperPortfolio(): Promise<PaperPortfolioSnapshot> 
   const end = new Date().toISOString().slice(0, 10);
   // Extra history before inception so beta OLS has a full lookback window.
   const betaWarmStart = "2025-01-01";
-  const prices = await fetchYahooOpens(
+  const market = await fetchYahooOpens(
     [...tickers],
     betaWarmStart < start ? betaWarmStart : start,
     end,
   );
+  return simulateLoadedBook(history, market, end);
+}
 
+export function simulateLoadedBook(
+  history: { date: string; weights: WeightMap }[],
+  market: MarketData,
+  asOf: string,
+): PaperPortfolioSnapshot {
   const state: SimState = {
     lots: [],
     closed: [],
@@ -635,39 +916,51 @@ export async function simulatePaperPortfolio(): Promise<PaperPortfolioSnapshot> 
     cumRealizedLosses: 0,
     cashFactor: 0,
     cashVoo: 0,
+    dripFactor: {},
+    dripVoo: {},
+    distributionsFactor: 0,
+    distributionsVoo: 0,
     notes: [
-      `Catch-up replay from model inception ${STRATEGY_INCEPTION_DATE} through ${end}.`,
+      `Catch-up replay from model inception ${STRATEGY_INCEPTION_DATE} through ${asOf}.`,
       "TLH substitutes ranked by Euclidean distance in estimated factor-beta space.",
     ],
   };
 
   const weeklySeries: PaperWeeklyPoint[] = [];
+  let cursor = "0000-00-00";
   let betaCache = new Map<string, BetaVector>();
   let betaCacheAsOf = "";
 
   for (let i = 0; i < history.length; i++) {
     const run = history[i]!;
     const fillDate = nextBusinessDayAfter(run.date);
-    // Drop expired wash-sale restrictions.
-    for (const [ticker, soldOn] of [...state.wash.entries()]) {
-      if (diffDays(soldOn, fillDate) >= WASH_SALE_DAYS) state.wash.delete(ticker);
-    }
     if (betaCacheAsOf !== fillDate) {
       const held = state.lots.map((l) => l.ticker);
       const weighted = Object.keys(run.weights);
       const peerPool = Object.values(ETF_CATEGORY_PEERS).flat();
       betaCache = buildBetaCache(
         [...new Set([...held, ...weighted, ...peerPool, ...FACTOR_PROXY_TICKERS])],
-        prices,
+        market.bars,
         fillDate,
       );
       betaCacheAsOf = fillDate;
     }
-    evaluateExits(state, fillDate, run.weights, prices, betaCache);
-    deployContribution(state, run.date, fillDate, run.weights, prices);
+    walkSessions(
+      state,
+      market,
+      cursor,
+      fillDate,
+      {
+        runDate: run.date,
+        fillDate,
+        weights: run.weights,
+      },
+      betaCache,
+    );
+    cursor = fillDate;
 
     const contributed = (i + 1) * WEEKLY_CONTRIBUTION_USD;
-    const mtm = markToMarket(state, fillDate, prices);
+    const mtm = markToMarket(state, fillDate, market.bars);
     const strategyReturnPct = contributed > 0 ? (mtm.stratMv / contributed - 1) * 100 : 0;
     const vooReturnPct = contributed > 0 ? (mtm.vooMv / contributed - 1) * 100 : 0;
     weeklySeries.push({
@@ -684,5 +977,6 @@ export async function simulatePaperPortfolio(): Promise<PaperPortfolioSnapshot> 
     });
   }
 
-  return summarize(state, end, history.length, prices, weeklySeries);
+  if (asOf > cursor) walkSessions(state, market, cursor, asOf, null);
+  return summarize(state, asOf, history.length, market.bars, weeklySeries);
 }
