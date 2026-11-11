@@ -68,6 +68,9 @@ const FACTOR_META: Record<string, { code: string; name: string; description: str
 
 const FACTOR_ORDER = ["Mkt-RF", "SMB", "HML", "RMW", "CMA", "WML"];
 
+/** Early runs kept in storage but omitted from the ETF model history on the site. */
+const OMITTED_FACTOR_RUN_DATES = new Set(["2026-09-14", "2026-09-20"]);
+
 const normKey = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 
 const RETURN_KEYS = new Set([
@@ -98,7 +101,6 @@ const SHARPE_KEYS = new Set([
   "portfoliosharpe",
   "expectedsharperatio",
 ]);
-
 
 export interface FactorBetaData {
   current: FactorBetaRow | null;
@@ -146,7 +148,6 @@ function buildRun(date: string, allRows: RawRow[]): FactorBetaRow {
     (r) =>
       !["factorreturns", "portfolioweights", "fundexpectedreturn"].includes(normKey(r.data_type)),
   );
-
 
   const fScale = scaleFactor(
     factorRows.map((r) => toNumber(r.value)).filter((n): n is number => n !== null),
@@ -255,7 +256,9 @@ export async function fetchFactorBetaData(): Promise<FactorBetaData> {
       else groups.set(date, [r]);
     }
 
-    const dates = Array.from(groups.keys()).sort((a, b) => (a < b ? 1 : -1));
+    const dates = Array.from(groups.keys())
+      .filter((date) => !OMITTED_FACTOR_RUN_DATES.has(date))
+      .sort((a, b) => (a < b ? 1 : -1));
     const runs = dates.map((d) => buildRun(d, groups.get(d)!));
     if (!runs.length) throw new Error("empty");
 
