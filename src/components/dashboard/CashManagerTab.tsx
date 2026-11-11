@@ -10,11 +10,12 @@ import {
   Wallet,
 } from "lucide-react";
 
+import { getAlpacaPaperLedger } from "@/lib/alpaca.functions";
 import { fetchCashManagerYields, type CashFund } from "@/lib/cash-manager";
 import {
   CASH_MARGIN_RESERVE_USD,
   ETF_TARGET_CAPITAL_USD,
-  OPTIONS_BP_USED_USD,
+  OPTIONS_PAPER_CAPITAL_USD,
   cashPartitions,
 } from "@/lib/capital-book";
 import { getPaperPortfolio } from "@/lib/paper-portfolio.functions";
@@ -147,6 +148,13 @@ export function CashManagerTab() {
     staleTime: 10 * 60_000,
     retry: 1,
   });
+  const fetchAlpaca = useServerFn(getAlpacaPaperLedger);
+  const alpaca = useQuery({
+    queryKey: ["alpaca-paper-ledger"],
+    queryFn: () => fetchAlpaca(),
+    staleTime: 60_000,
+    retry: 1,
+  });
 
   const funds = yields.data?.funds ?? [];
   const top = funds[0];
@@ -169,9 +177,14 @@ export function CashManagerTab() {
   const loading = yields.isPending;
 
   const etfFloat = paper.data?.etfFloatRemaining ?? ETF_TARGET_CAPITAL_USD;
+  const optionsBp = alpaca.data?.account?.optionsBuyingPower;
+  const optionsBpUsed =
+    alpaca.data?.live && optionsBp != null
+      ? Math.max(0, OPTIONS_PAPER_CAPITAL_USD - Math.min(OPTIONS_PAPER_CAPITAL_USD, optionsBp))
+      : 0;
   const partitions = cashPartitions({
     etfFloatRemaining: etfFloat,
-    optionsBpUsed: OPTIONS_BP_USED_USD,
+    optionsBpUsed,
   });
 
   return (
@@ -193,8 +206,12 @@ export function CashManagerTab() {
             icon={Shield}
             label="Pledged options reserve"
             value={usd(partitions.pledgedReserveUsd)}
-            note={`${usd(partitions.optionsBpUsedUsd)} BP used · not live`}
-            loading={false}
+            note={
+              alpaca.data?.live
+                ? `${usd(partitions.optionsBpUsedUsd)} modeled sleeve BP used · Alpaca live`
+                : `${usd(partitions.optionsBpUsedUsd)} BP used · awaiting Alpaca secrets`
+            }
+            loading={alpaca.isPending}
           />
           <MetricCard
             icon={Wallet}
