@@ -26,7 +26,7 @@ import {
   taxLedgerTrades,
 } from "@/lib/paper-portfolio-rules";
 import { RegimeRead } from "@/components/dashboard/RegimeRead";
-import { OptionsSleevePanel } from "@/components/dashboard/OptionsSleevePanel";
+import { useNavigate } from "@tanstack/react-router";
 
 const pct = (n: number | null | undefined, digits = 2) =>
   typeof n === "number" && Number.isFinite(n) ? `${n > 0 ? "+" : ""}${n.toFixed(digits)}%` : "—";
@@ -375,6 +375,31 @@ function TaxComparison({
           })}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+function OptionsMovedNote() {
+  const navigate = useNavigate({ from: "/" });
+  return (
+    <div className="rounded-lg border border-dashed border-border/70 bg-secondary/10 px-4 py-3 text-sm text-muted-foreground">
+      Options sleeve moved to{" "}
+      <button
+        type="button"
+        className="font-medium text-accent underline-offset-2 hover:underline"
+        onClick={() => void navigate({ search: { tab: "options" } })}
+      >
+        Options Book
+      </button>
+      . Book-level NAV and collateral live on{" "}
+      <button
+        type="button"
+        className="font-medium text-accent underline-offset-2 hover:underline"
+        onClick={() => void navigate({ search: { tab: "summary" } })}
+      >
+        Summary
+      </button>
+      .
     </div>
   );
 }
@@ -784,7 +809,7 @@ export function FactorBetaTab() {
 
       <PaperPortfolioPanels paper={paper} isPending={paperPending} />
 
-      <OptionsSleevePanel />
+      <OptionsMovedNote />
 
       <section className="panel p-6">
         <div className="mb-5 flex items-center gap-2.5">

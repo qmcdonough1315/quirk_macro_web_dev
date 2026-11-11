@@ -1,16 +1,18 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Activity } from "lucide-react";
 
+import { SummaryTab } from "@/components/dashboard/SummaryTab";
 import { MacroTab } from "@/components/dashboard/MacroTab";
 import { FactorBetaTab } from "@/components/dashboard/FactorBetaTab";
+import { OptionsBookTab } from "@/components/dashboard/OptionsBookTab";
 import { CashManagerTab } from "@/components/dashboard/CashManagerTab";
 import { AboutTab } from "@/components/dashboard/AboutTab";
 
-const TABS = ["factors", "cash", "macros", "about"] as const;
+const TABS = ["summary", "factors", "options", "cash", "macros", "about"] as const;
 type TabId = (typeof TABS)[number];
 
 function parseTab(value: unknown): TabId {
-  return TABS.includes(value as TabId) ? (value as TabId) : "factors";
+  return TABS.includes(value as TabId) ? (value as TabId) : "summary";
 }
 
 export const Route = createFileRoute("/")({
@@ -23,13 +25,13 @@ export const Route = createFileRoute("/")({
       {
         name: "description",
         content:
-          "Weekly factor-model allocation, cash yields, and the rates that explain the regime.",
+          "Paper book overview across the ETF factor model, options sleeve, cash engine, and macro regime.",
       },
       { property: "og:title", content: "Quirk Macro — Personal Financial Analytics" },
       {
         property: "og:description",
         content:
-          "Weekly factor-model allocation, cash yields, and the rates that explain the regime.",
+          "Paper book overview across the ETF factor model, options sleeve, cash engine, and macro regime.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -39,9 +41,11 @@ export const Route = createFileRoute("/")({
 });
 
 const NAV: { id: TabId; label: string }[] = [
-  { id: "factors", label: "Wealth Management" },
+  { id: "summary", label: "Summary" },
+  { id: "factors", label: "ETF Model" },
+  { id: "options", label: "Options Book" },
   { id: "cash", label: "Cash Engine" },
-  { id: "macros", label: "Get Your Macros" },
+  { id: "macros", label: "Macros" },
   { id: "about", label: "About" },
 ];
 
@@ -94,8 +98,12 @@ function Dashboard() {
       </header>
 
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
-        {tab === "factors" ? (
+        {tab === "summary" ? (
+          <SummaryTab />
+        ) : tab === "factors" ? (
           <FactorBetaTab />
+        ) : tab === "options" ? (
+          <OptionsBookTab />
         ) : tab === "cash" ? (
           <CashManagerTab />
         ) : tab === "macros" ? (
