@@ -202,7 +202,7 @@ function parseSplitRatio(raw: {
   }
   if (typeof raw.splitRatio === "string" && raw.splitRatio.includes(":")) {
     const [num, den] = raw.splitRatio.split(":").map((part) => Number(part));
-    if (num > 0 && den > 0) return num / den;
+    if (num !== undefined && den !== undefined && num > 0 && den > 0) return num / den;
   }
   if (
     typeof raw.numerator === "number" &&

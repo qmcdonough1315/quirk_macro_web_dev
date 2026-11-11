@@ -102,115 +102,8 @@ const SHARPE_KEYS = new Set([
   "expectedsharperatio",
 ]);
 
-export const mockCurrentRun: FactorBetaRow = {
-  id: "mock-current",
-  as_of_date: "2026-08-24",
-  horizon_months: 3,
-  regime_summary:
-    "The model reads the current tape as a late-cycle expansion with easing financial conditions: market beta is still the dominant reward, but the premium is compressing as term-premium volatility rises. Quality is doing the heavy lifting — profitability (RMW) and conservative investment (CMA) both carry positive loadings, while size (SMB) remains a drag as balance-sheet strength concentrates in large caps. Value and momentum are converging, which historically precedes a rotation window, so the portfolio tilts toward profitable large caps with a partial momentum hedge.",
-  factors: [
-    {
-      code: "Mkt-RF",
-      name: "Market Risk",
-      description: "Excess return of the market over the risk-free rate",
-      predicted: 2.14,
-      prior: 1.62,
-      confidence: 71,
-    },
-    {
-      code: "SMB",
-      name: "Size",
-      description: "Small minus Big",
-      predicted: -0.87,
-      prior: -0.42,
-      confidence: 63,
-    },
-    {
-      code: "HML",
-      name: "Value",
-      description: "High minus Low book-to-market",
-      predicted: 0.46,
-      prior: 0.94,
-      confidence: 48,
-    },
-    {
-      code: "RMW",
-      name: "Profitability",
-      description: "Robust minus Weak operating profitability",
-      predicted: 1.38,
-      prior: 1.05,
-      confidence: 74,
-    },
-    {
-      code: "CMA",
-      name: "Investment",
-      description: "Conservative minus Aggressive asset growth",
-      predicted: 0.72,
-      prior: 0.33,
-      confidence: 58,
-    },
-    {
-      code: "WML",
-      name: "Momentum",
-      description: "Winners minus Losers (Carhart)",
-      predicted: 1.91,
-      prior: 2.47,
-      confidence: 66,
-    },
-  ],
-  portfolio: [
-    { ticker: "QUAL", fund: fundName("QUAL"), expectedReturn: 3.42, weight: 16 },
-    { ticker: "MTUM", fund: fundName("MTUM"), expectedReturn: 3.86, weight: 14 },
-    { ticker: "SPLV", fund: fundName("SPLV"), expectedReturn: 1.94, weight: 12 },
-    { ticker: "COWZ", fund: fundName("COWZ"), expectedReturn: 3.11, weight: 11 },
-    { ticker: "VTV", fund: fundName("VTV"), expectedReturn: 2.28, weight: 10 },
-    { ticker: "XLK", fund: fundName("XLK"), expectedReturn: 4.05, weight: 9 },
-    { ticker: "XLV", fund: fundName("XLV"), expectedReturn: 2.02, weight: 8 },
-    { ticker: "IWY", fund: fundName("IWY"), expectedReturn: 3.55, weight: 8 },
-    { ticker: "IEF", fund: fundName("IEF"), expectedReturn: 0.88, weight: 7 },
-    { ticker: "GLD", fund: fundName("GLD"), expectedReturn: 1.47, weight: 5 },
-  ],
-  expected_return: 2.87,
-  expected_vol: 9.6,
-  expected_sharpe: 1.14,
-  realized_return: null,
-  benchmark_return: null,
-  hit_rate: null,
-};
-
-export const mockPreviousRuns: FactorBetaRow[] = [
-  {
-    ...mockCurrentRun,
-    id: "mock-prev-1",
-    as_of_date: "2026-08-17",
-    regime_summary:
-      "Prior run leaned into momentum and quality as disinflation held; size stayed negative and value was flat.",
-    factors: mockCurrentRun.factors.map((f) => ({ ...f, predicted: f.prior ?? f.predicted })),
-    expected_return: 2.64,
-    expected_vol: 10.1,
-    expected_sharpe: 1.02,
-    realized_return: 3.12,
-    benchmark_return: 2.41,
-    hit_rate: 66.7,
-  },
-  {
-    ...mockCurrentRun,
-    id: "mock-prev-2",
-    as_of_date: "2026-08-10",
-    regime_summary:
-      "Risk-on regime with a widening market premium; the model overweighted beta and under-hedged duration.",
-    factors: mockCurrentRun.factors.map((f) => ({ ...f, predicted: (f.prior ?? 0) * 0.8 })),
-    expected_return: 2.31,
-    expected_vol: 11.4,
-    expected_sharpe: 0.81,
-    realized_return: 1.44,
-    benchmark_return: 2.02,
-    hit_rate: 50,
-  },
-];
-
 export interface FactorBetaData {
-  current: FactorBetaRow;
+  current: FactorBetaRow | null;
   previous: FactorBetaRow[];
   live: boolean;
 }
@@ -338,7 +231,7 @@ function buildRun(date: string, allRows: RawRow[]): FactorBetaRow {
 
 /**
  * Reads the last 3 months of runs from `factor_predictions`, newest first.
- * Falls back to modeled placeholder data while the table is empty.
+ * Returns an empty result when the table is missing or has no rows.
  */
 export async function fetchFactorBetaData(): Promise<FactorBetaData> {
   try {
@@ -380,6 +273,6 @@ export async function fetchFactorBetaData(): Promise<FactorBetaData> {
 
     return { current: runs[0]!, previous: runs.slice(1), live: true };
   } catch {
-    return { current: mockCurrentRun, previous: mockPreviousRuns, live: false };
+    return { current: null, previous: [], live: false };
   }
 }

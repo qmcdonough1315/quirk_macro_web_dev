@@ -182,7 +182,7 @@ export function CashManagerTab() {
               ? "Loading"
               : yields.data?.live
                 ? `Live · ${yields.data.asOf}`
-                : `Placeholder data · ${yields.data?.asOf ?? ""}`}
+                : "Unavailable"}
           </span>
         </div>
 

@@ -651,15 +651,15 @@ export function FactorBetaTab() {
     : [];
 
   return (
-    <div className="relative space-y-6 pb-16">
+    <div className="space-y-6">
       <section className="panel p-6">
         <div className="mb-4 flex items-center gap-2.5">
           <Brain className="size-4 text-accent" />
           <h2 className="font-display text-base font-semibold tracking-tight">
             Current Regime Read — Fama-French &amp; Carhart
           </h2>
-          <span className="label-caps ml-auto">
-            {isPending ? "Loading" : data?.live ? "Live model run" : "Placeholder run"}
+          <span className="label-caps w-full sm:ml-auto sm:w-auto">
+            {isPending ? "Loading" : data?.live ? "Live model run" : "Unavailable"}
             {current ? ` · ${current.as_of_date}` : ""}
           </span>
         </div>
@@ -796,10 +796,6 @@ export function FactorBetaTab() {
           <p className="text-sm text-muted-foreground">No prior model runs recorded yet.</p>
         )}
       </section>
-
-      <p className="pointer-events-none sticky bottom-4 z-10 ml-auto w-fit rounded-md border border-border/70 bg-background/85 px-3 py-2 text-right text-xs text-muted-foreground backdrop-blur">
-        Disclaimer: Not Investment Advice. For informational and educational purposes only.
-      </p>
     </div>
   );
 }

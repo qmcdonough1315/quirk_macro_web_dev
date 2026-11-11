@@ -6,7 +6,7 @@ export default defineTool({
   name: "get_macro_snapshot",
   title: "Get macro snapshot",
   description:
-    "Current US macro indicators tracked by Quirk Macro: 30-year fixed mortgage rate, 10-year Treasury yield, the mortgage/Treasury spread, real GDP growth (QoQ annualized) and Core PCE inflation (YoY), plus the trailing 12-month monthly series.",
+    "Current US macro indicators tracked by Quirk Macro: 30-year fixed mortgage rate, 10-year Treasury yield, the mortgage minus 10-year spread, real GDP growth (year over year) and Core PCE inflation (YoY), plus the trailing 12-month monthly series.",
   inputSchema: {},
   handler: async () => {
     const snap = await fetchMacroSnapshot();
