@@ -115,6 +115,126 @@ export function taxLedgerTrades<T extends { strategy?: string; reason?: string }
     .reverse();
 }
 
+export interface DatedCashFlow {
+  date: string;
+  amount: number;
+}
+
+const MS_PER_YEAR = 365 * 86_400_000;
+
+function yearFraction(fromIso: string, toIso: string): number {
+  return (Date.parse(`${toIso}T00:00:00Z`) - Date.parse(`${fromIso}T00:00:00Z`)) / MS_PER_YEAR;
+}
+
+function mergeCashFlows(flows: DatedCashFlow[]): DatedCashFlow[] {
+  const byDate = new Map<string, number>();
+  for (const flow of flows) {
+    if (!flow.date || !Number.isFinite(flow.amount) || flow.amount === 0) continue;
+    byDate.set(flow.date, (byDate.get(flow.date) ?? 0) + flow.amount);
+  }
+  return Array.from(byDate, ([date, amount]) => ({ date, amount }))
+    .filter((flow) => flow.amount !== 0)
+    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+}
+
+/**
+ * Money-weighted annualized return, Excel XIRR convention (actual/365).
+ * Cash outflows are negative. Returns a decimal rate, or null if it cannot be solved.
+ */
+export function xirr(flows: DatedCashFlow[]): number | null {
+  const merged = mergeCashFlows(flows);
+  if (merged.length < 2) return null;
+  if (!merged.some((flow) => flow.amount < 0) || !merged.some((flow) => flow.amount > 0))
+    return null;
+
+  const start = merged[0]!.date;
+  const npv = (rate: number) => {
+    let total = 0;
+    for (const flow of merged) {
+      total += flow.amount / Math.pow(1 + rate, yearFraction(start, flow.date));
+    }
+    return total;
+  };
+  const derivative = (rate: number) => {
+    let slope = 0;
+    for (const flow of merged) {
+      const years = yearFraction(start, flow.date);
+      slope += (-years * flow.amount) / Math.pow(1 + rate, years + 1);
+    }
+    return slope;
+  };
+
+  for (const seed of [0.1, -0.2, 0.5, 1, -0.5, 0]) {
+    let rate = seed;
+    for (let i = 0; i < 50; i++) {
+      if (rate <= -0.999999) break;
+      const value = npv(rate);
+      const slope = derivative(rate);
+      if (!Number.isFinite(value) || !Number.isFinite(slope) || Math.abs(slope) < 1e-12) break;
+      const next = rate - value / slope;
+      if (!Number.isFinite(next) || next <= -0.999999) break;
+      if (Math.abs(next - rate) < 1e-10 && Math.abs(value) < 1e-6) return next;
+      rate = next;
+    }
+  }
+
+  let lo = -0.999999;
+  let hi = 5;
+  let npvLo = npv(lo);
+  let npvHi = npv(hi);
+  if (!Number.isFinite(npvLo)) return null;
+  for (const cap of [10, 25, 50, 100]) {
+    if (Number.isFinite(npvHi) && npvLo * npvHi <= 0) break;
+    hi = cap;
+    npvHi = npv(hi);
+  }
+  if (!Number.isFinite(npvHi) || npvLo * npvHi > 0) return null;
+
+  for (let i = 0; i < 80; i++) {
+    const mid = (lo + hi) / 2;
+    const npvMid = npv(mid);
+    if (!Number.isFinite(npvMid)) return null;
+    if (Math.abs(npvMid) < 1e-7 || hi - lo < 1e-10) return mid;
+    if (npvLo * npvMid <= 0) {
+      hi = mid;
+    } else {
+      lo = mid;
+      npvLo = npvMid;
+    }
+  }
+  return (lo + hi) / 2;
+}
+
+/**
+ * Annualized alpha, in percentage points, of a DCA sleeve versus a same-schedule benchmark.
+ * Each contribution is an outflow; each sleeve is valued once, on `asOf`.
+ */
+export function annualizedAlphaPct(input: {
+  contributions: DatedCashFlow[];
+  asOf: string;
+  factorValue: number;
+  vooValue: number;
+}): number | null {
+  const { contributions, asOf, factorValue, vooValue } = input;
+  if (!asOf || contributions.length === 0) return null;
+  if (
+    !Number.isFinite(factorValue) ||
+    !Number.isFinite(vooValue) ||
+    factorValue <= 0 ||
+    vooValue <= 0
+  ) {
+    return null;
+  }
+  const invested = contributions.map((flow) => ({
+    date: flow.date,
+    amount: -Math.abs(flow.amount),
+  }));
+  const factor = xirr([...invested, { date: asOf, amount: factorValue }]);
+  const voo = xirr([...invested, { date: asOf, amount: vooValue }]);
+  if (factor === null || voo === null) return null;
+  return (factor - voo) * 100;
+}
+
 /** Next weekday on/after the day following `iso` (model run → next session). */
 export function nextBusinessDayAfter(iso: string): string {
   const d = new Date(`${iso}T00:00:00Z`);
