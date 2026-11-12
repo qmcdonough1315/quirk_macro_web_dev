@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import {
@@ -21,7 +20,7 @@ import {
   YAxis,
 } from "recharts";
 
-import { getEconCalendar, getMacroSnapshot, getRatesOutlook } from "@/lib/market.functions";
+import { getMacroSnapshot, getRatesOutlook } from "@/lib/market.functions";
 import { WeeklyDigest } from "@/components/dashboard/WeeklyDigest";
 
 function CurveTooltip({ active, payload, label }: any) {
@@ -44,8 +43,6 @@ function CurveTooltip({ active, payload, label }: any) {
 
 const bps = (n: number) => `${n > 0 ? "+" : ""}${n} bps`;
 const pp = (n: number) => `${n > 0 ? "+" : ""}${n.toFixed(2)} pp`;
-
-const IMPACT_BADGE: Record<string, string> = { high: "🔴", medium: "🟡", low: "🔵" };
 
 const fmtDay = (iso: string) =>
   new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", {
@@ -72,27 +69,15 @@ export function MacroTab() {
     retry: 1,
   });
 
-  const fetchCalendar = useServerFn(getEconCalendar);
-  const calendar = useQuery({
-    queryKey: ["econ-calendar"],
-    queryFn: () => fetchCalendar(),
-    staleTime: 6 * 60 * 60_000,
-    gcTime: 24 * 60 * 60_000,
-    retry: 1,
-  });
-
-  const calendarGroups = useMemo(() => {
-    const map = new Map<string, NonNullable<typeof calendar.data>>();
-    for (const e of calendar.data ?? []) {
-      const arr = map.get(e.date) ?? [];
-      arr.push(e);
-      map.set(e.date, arr);
-    }
-    return Array.from(map.entries());
-  }, [calendar.data]);
-
   const ticker = data
     ? [
+        {
+          label: "30Y Fixed Mortgage",
+          value: `${data.mortgage.latest.toFixed(2)}%`,
+          change: bps(data.mortgage.changeBps),
+          up: data.mortgage.changeBps >= 0,
+          upIsGood: false,
+        },
         {
           label: "10Y Treasury Yield",
           value: `${data.treasury.latest.toFixed(2)}%`,
@@ -101,7 +86,14 @@ export function MacroTab() {
           upIsGood: false,
         },
         {
-          label: "GDP Growth · QoQ ann.",
+          label: "Mortgage less 10Y",
+          value: `${data.spreadBps} bps`,
+          change: bps(data.spreadChangeBps),
+          up: data.spreadChangeBps >= 0,
+          upIsGood: false,
+        },
+        {
+          label: "GDP Growth · YoY",
           value: `${data.gdp.latest.toFixed(1)}%`,
           change: pp(data.gdp.changePp),
           up: data.gdp.changePp >= 0,
@@ -129,9 +121,10 @@ export function MacroTab() {
       ) : null}
 
       {/* Top ticker */}
+      {isPending || ticker.length ? (
       <section className="panel flex flex-wrap divide-x divide-border/70">
         {isPending
-          ? Array.from({ length: 3 }).map((_, i) => (
+          ? Array.from({ length: 5 }).map((_, i) => (
               <div key={i} className="min-w-[170px] flex-1 px-5 py-4">
                 <div className="h-3 w-20 animate-pulse rounded bg-secondary" />
                 <div className="mt-2.5 h-5 w-16 animate-pulse rounded bg-secondary" />
@@ -160,6 +153,62 @@ export function MacroTab() {
               );
             })}
       </section>
+      ) : null}
+
+      {data?.series.length ? (
+        <section className="panel p-6">
+          <div className="mb-4">
+            <h2 className="font-display text-xl font-semibold tracking-tight">
+              30-Year Mortgage vs 10-Year Treasury
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Trailing 12 months. Freddie Mac 30-year fixed survey and the constant-maturity
+              10-year, both from FRED. As of {data.mortgage.latestDate}.
+            </p>
+          </div>
+          <div className="h-[280px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={data.series} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
+                <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
+                <XAxis
+                  dataKey="month"
+                  tickLine={false}
+                  axisLine={false}
+                  stroke="var(--muted-foreground)"
+                  fontSize={11}
+                />
+                <YAxis
+                  domain={["auto", "auto"]}
+                  tickLine={false}
+                  axisLine={false}
+                  stroke="var(--muted-foreground)"
+                  fontSize={11}
+                  tickFormatter={(v) => `${v}%`}
+                />
+                <Tooltip content={<CurveTooltip />} cursor={{ stroke: "var(--border)" }} />
+                <Line
+                  type="monotone"
+                  dataKey="mortgage"
+                  name="30Y mortgage"
+                  stroke="var(--chart-1)"
+                  strokeWidth={2}
+                  dot={false}
+                  isAnimationActive={false}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="treasury"
+                  name="10Y Treasury"
+                  stroke="var(--chart-3)"
+                  strokeWidth={2}
+                  dot={false}
+                  isAnimationActive={false}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </section>
+      ) : null}
 
       <section className="grid gap-4 lg:grid-cols-3">
         {/* Yield curve */}
@@ -177,22 +226,25 @@ export function MacroTab() {
                 {rates.data?.curveDate ? ` · as of ${rates.data.curveDate}` : ""} — live from FRED.
               </p>
             </div>
-            <div className="flex items-center gap-5 text-xs">
-              <span className="flex items-center gap-2 text-muted-foreground">
-                <span className="h-0.5 w-5 rounded-full bg-chart-1" /> Today
-              </span>
-              <span className="flex items-center gap-2 text-muted-foreground">
-                <span className="h-0.5 w-5 rounded-full bg-chart-3" /> One year ago
-              </span>
-            </div>
+            {rates.data?.curve.length ? (
+              <div className="flex items-center gap-5 text-xs">
+                <span className="flex items-center gap-2 text-muted-foreground">
+                  <span className="h-0.5 w-5 rounded-full bg-chart-1" /> Today
+                </span>
+                <span className="flex items-center gap-2 text-muted-foreground">
+                  <span className="h-0.5 w-5 rounded-full bg-chart-3" /> One year ago
+                </span>
+              </div>
+            ) : null}
           </div>
 
-          <div className="mt-6 h-[300px] w-full">
+          <div className={rates.data?.curve.length ? "mt-6 h-[300px] w-full" : "mt-4"}>
             {rates.isPending ? (
-              <div className="size-full animate-pulse rounded-lg bg-secondary/40" />
-            ) : rates.error ? (
+              <div className="h-[300px] w-full animate-pulse rounded-lg bg-secondary/40" />
+            ) : rates.error || !rates.data?.curve.length ? (
               <p className="text-sm text-muted-foreground">
-                Curve unavailable: {(rates.error as Error).message}
+                Curve unavailable
+                {rates.error ? `: ${(rates.error as Error).message}` : "."}
               </p>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
@@ -251,9 +303,9 @@ export function MacroTab() {
             </h3>
           </div>
           <p className="text-xs text-muted-foreground">
-            Market-implied odds for the next FOMC decision
-            {rates.data?.nextMeeting ? ` (${fmtDay(rates.data.nextMeeting)})` : ""} — Atlanta Fed
-            market-probability methodology.
+            Bill-implied gap between effective fed funds and the 3-month Treasury
+            {rates.data?.nextMeeting ? `, next listed FOMC date ${fmtDay(rates.data.nextMeeting)}` : ""}
+            . Not the Atlanta Fed probability tracker.
           </p>
 
           {rates.isPending ? (
@@ -317,57 +369,10 @@ export function MacroTab() {
             <h3 className="font-display text-base font-semibold tracking-tight">
               Upcoming 7-Day Calendar
             </h3>
-            <span className="ml-auto rounded-md bg-secondary px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-              Consensus vs. prior
-            </span>
           </div>
-          {calendar.isPending ? (
-            <div className="space-y-2.5">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="h-12 animate-pulse rounded-lg bg-secondary/40" />
-              ))}
-            </div>
-          ) : calendar.error ? (
-            <p className="text-sm text-muted-foreground">
-              Calendar unavailable: {(calendar.error as Error).message}
-            </p>
-          ) : calendarGroups.length ? (
-            <div className="space-y-4">
-              {calendarGroups.map(([date, events]) => (
-                <div key={date}>
-                  <p className="label-caps mb-2">{fmtDay(date)}</p>
-                  <div className="space-y-2">
-                    {events.map((e, i) => (
-                      <div
-                        key={`${e.title}-${i}`}
-                        className="flex items-center gap-3 rounded-lg border border-border/70 bg-secondary/30 px-3.5 py-2.5"
-                      >
-                        <span className="text-sm leading-none" title={`${e.impact} impact`}>
-                          {IMPACT_BADGE[e.impact] ?? "⚪"}
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium text-foreground">{e.title}</p>
-                          <p className="mt-0.5 text-xs text-muted-foreground">
-                            {e.time} · {e.category}
-                          </p>
-                        </div>
-                        <div className="shrink-0 text-right font-mono text-[11px] tabular-nums text-muted-foreground">
-                          <p>
-                            <span className="text-foreground">{e.consensus}</span> cons
-                          </p>
-                          <p>{e.prior} prior</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              No major releases scheduled over the next 7 days.
-            </p>
-          )}
+          <p className="text-sm text-muted-foreground">
+            No release calendar is connected. Consensus and prior prints are not estimated.
+          </p>
         </div>
       </section>
     </div>

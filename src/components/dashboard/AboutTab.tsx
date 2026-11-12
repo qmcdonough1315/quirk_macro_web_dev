@@ -15,7 +15,7 @@ const WHY_POINTS = [
   },
   {
     title: "Data Integrity You Can Trust",
-    body: "Built on open-source automated data pipelines sourcing directly from official institutions (FRED, U.S. Census Bureau, Federal Reserve).",
+    body: "Live rates come from FRED. Model weights and cash yields come from the weekly data jobs. Missing feeds stay blank.",
   },
 ];
 
@@ -23,7 +23,6 @@ const PIPELINE = [
   "Exploring further data sources to integrate into the terminal.",
   "Building more customized dashboards that personalize the dashboard view based on individual preferences.",
   "Adding a profile feature so personal preferences can be saved.",
-  "Updating and refining the Housing Market Explorer to improve geographical awareness.",
 ];
 
 export function AboutTab() {

@@ -1,8 +1,4 @@
-/** Server-only helpers for FRED, RealtyAPI and the AI area-profile summary. */
-
-import { COMMENTARY_CACHE_TTL_MS, getEasternRefreshWindow } from "./ai-refresh";
-import { AI_UNAVAILABLE, generateAiText, hashKey, parseJsonBlock } from "./ai.server";
-import { fetchRealtyMarket } from "./realty.server";
+/** Server-only FRED helpers for the macro dashboard. */
 
 
 export interface SeriesPoint {
@@ -69,7 +65,7 @@ export async function fetchFredSeries(seriesId: string): Promise<SeriesSummary> 
 export interface MacroSnapshot {
   mortgage: SeriesSummary;
   treasury: SeriesSummary;
-  /** Real GDP growth, QoQ annualized (FRED A191RO1Q156NBEA) */
+  /** Real GDP growth, percent change from a year ago (FRED A191RO1Q156NBEA) */
   gdp: { latest: number; latestDate: string; changePp: number };
   /** Core PCE price index, YoY % (FRED PCEPILFE) */
   corePce: { latest: number; latestDate: string; changePp: number };
@@ -118,150 +114,6 @@ export async function fetchMacroSnapshot(): Promise<MacroSnapshot> {
   };
 }
 
-export interface LocalMarketLive {
-  zip: string;
-  name: string;
-  stats: { label: string; value: string; detail: string }[];
-  rental: { label: string; value: string; detail: string }[];
-  affordability: number;
-  affordabilityNotes: { label: string; value: string }[];
-  bullets: string[];
-  tags: string[];
-}
-
-const usd = (n: number | undefined | null, digits = 0) =>
-  typeof n === "number" && Number.isFinite(n)
-    ? `$${n.toLocaleString("en-US", { maximumFractionDigits: digits })}`
-    : "—";
-
-const pct = (n: number | undefined | null) =>
-  typeof n === "number" && Number.isFinite(n) ? `${n > 0 ? "+" : ""}${n.toFixed(1)}%` : "—";
-
-// RentCast has been replaced by RealtyAPI (Redfin + Apartments.com) — see realty.server.ts.
-
-
-export async function generateAreaProfile(zip: string, context: string): Promise<{ bullets: string[]; tags: string[]; name: string }> {
-  const refreshWindow = getEasternRefreshWindow();
-  const raw = await generateAiText(
-    [
-      {
-        role: "system",
-        content:
-          "You are a housing market analyst. Respond ONLY with strict JSON: {\"name\":string,\"bullets\":[string,string,string],\"tags\":[string]}. name is the 'Neighborhood, City, State' for the ZIP. Exactly 3 bullets, each 1-2 sentences: (1) lifestyle & local vibe, (2) transit & access, (3) housing affordability & the local economy. tags: 4-5 short descriptors.",
-      },
-      { role: "user", content: `ZIP code ${zip}. Market data: ${context}` },
-    ],
-    {
-      cacheKey: `area:${refreshWindow}:${zip}:${hashKey(context)}`,
-      ttlMs: COMMENTARY_CACHE_TTL_MS,
-    },
-  );
-
-  const parsed = raw
-    ? parseJsonBlock<{ name?: string; bullets?: string[]; tags?: string[] }>(raw)
-    : null;
-
-  if (!parsed) return { name: `ZIP ${zip}`, bullets: [AI_UNAVAILABLE], tags: [] };
-
-  return {
-    name: parsed.name ?? `ZIP ${zip}`,
-    bullets: (parsed.bullets ?? [AI_UNAVAILABLE]).slice(0, 3),
-    tags: (parsed.tags ?? []).slice(0, 5),
-  };
-}
-
-export async function buildLocalMarket(zipInput: string): Promise<LocalMarketLive> {
-  const zip = zipInput.trim();
-  if (!/^\d{5}$/.test(zip)) throw new Error("Enter a valid 5-digit ZIP code");
-
-  const market = await fetchRealtyMarket(zip);
-
-  const medianPrice = market.medianPrice;
-  const medianRent = market.medianRent;
-  const ppsf = market.pricePerSqFt;
-  const priceYoY = market.priceYoYPct;
-  
-
-  const priceToRent =
-    medianPrice && medianRent ? medianPrice / (medianRent * 12) : undefined;
-  const capRate = medianPrice && medianRent ? ((medianRent * 12 * 0.6) / medianPrice) * 100 : undefined;
-
-  // 30-yr amortized payment on 80% LTV using the live FRED mortgage rate.
-  const mortgage = await fetchFredSeries("MORTGAGE30US");
-  const r = mortgage.latest / 100 / 12;
-  const principal = (medianPrice ?? 0) * 0.8;
-  const payment = r > 0 ? (principal * r) / (1 - Math.pow(1 + r, -360)) : 0;
-
-  const dom = market.medianDom;
-  // 0 = buyer market, 100 = seller market
-  const domScore = typeof dom === "number" ? Math.max(0, Math.min(100, 100 - (dom - 10) * 1.4)) : 50;
-  const momentum = typeof priceYoY === "number" ? Math.max(0, Math.min(100, 50 + priceYoY * 4)) : 50;
-  const affordability = Math.round(domScore * 0.55 + momentum * 0.45);
-
-  const profile = await generateAreaProfile(
-    zip,
-    JSON.stringify({
-      medianPrice,
-      pricePerSqFt: ppsf,
-      medianRent,
-      priceYoYPercent: priceYoY,
-      medianDaysOnMarket: dom,
-      homesSoldLastMonth: market.homesSold,
-      saleToListPercent: market.saleToListPct,
-      homesWithPriceDropsPercent: market.priceDropSharePct,
-      activeListings: market.totalListings,
-      mortgageRate: mortgage.latest,
-    }),
-  );
-
-  return {
-    zip,
-    name: profile.name,
-    stats: [
-      { label: "Median Sale Price", value: usd(medianPrice), detail: `${pct(priceYoY)} YoY` },
-      { label: "Price per Sq Ft", value: usd(ppsf), detail: "active Redfin listings" },
-      {
-        label: "Homes with Price Cuts",
-        value: typeof market.priceDropSharePct === "number" ? `${market.priceDropSharePct.toFixed(1)}%` : "—",
-        detail: `${market.newListings ?? "—"} new listings this week`,
-      },
-      {
-        label: "Median Days on Market",
-        value: typeof dom === "number" ? `${Math.round(dom)} days` : "—",
-        detail: `${market.homesSold ?? "—"} homes sold`,
-      },
-      {
-        label: "Est. Monthly Payment",
-        value: payment ? `${usd(payment)} / mo` : "—",
-        detail: `at ${mortgage.latest.toFixed(2)}% · 20% down`,
-      },
-    ],
-    rental: [
-      { label: "Median Rent", value: usd(medianRent), detail: "apartments.com listings" },
-      {
-        label: "Estimated Cap Rate",
-        value: typeof capRate === "number" ? `${capRate.toFixed(1)}%` : "—",
-        detail: "60% net operating margin assumed",
-      },
-      {
-        label: "Price-to-Rent Ratio",
-        value: typeof priceToRent === "number" ? `${priceToRent.toFixed(1)}x` : "—",
-        detail: typeof priceToRent === "number" && priceToRent > 20 ? "renting favored" : "buying favored",
-      },
-    ],
-    affordability,
-    affordabilityNotes: [
-      { label: "Median mortgage payment", value: payment ? `${usd(payment)} / mo` : "—" },
-      { label: "Est. down payment (20%)", value: usd((medianPrice ?? 0) * 0.2) },
-      { label: "Sale-to-list price", value: typeof market.saleToListPct === "number" ? `${market.saleToListPct.toFixed(1)}%` : "—" },
-      { label: "Median days on market", value: typeof dom === "number" ? `${Math.round(dom)} days` : "—" },
-    ],
-
-    bullets: profile.bullets,
-    tags: profile.tags,
-  };
-}
-
 // ---------------------------------------------------------------------------
 // Inflation (YoY), macro recap, and economic calendar
 // ---------------------------------------------------------------------------
@@ -305,103 +157,6 @@ export async function fetchInflationYoY(
   };
 }
 
-export interface CalendarEvent {
-  date: string; // YYYY-MM-DD
-  time: string; // e.g. "8:30 AM ET"
-  title: string;
-  category: string;
-  impact: "high" | "medium" | "low";
-  consensus: string;
-  prior: string;
-}
-
-function next7Days(): { date: string; weekday: string }[] {
-  const now = new Date();
-  const days: { date: string; weekday: string }[] = [];
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + i));
-    days.push({
-      date: d.toISOString().slice(0, 10),
-      weekday: d.toLocaleString("en-US", { weekday: "long", timeZone: "UTC" }),
-    });
-  }
-  return days;
-}
-
-/** Rule-based recurring release schedule, used when the AI calendar is unavailable. */
-function fallbackCalendar(days: { date: string; weekday: string }[]): CalendarEvent[] {
-  const byWeekday: Record<string, Omit<CalendarEvent, "date">[]> = {
-    Monday: [
-      { time: "11:00 AM ET", title: "NY Fed 1-Yr Inflation Expectations", category: "Inflation", impact: "low", consensus: "—", prior: "3.0%" },
-    ],
-    Tuesday: [
-      { time: "6:00 AM ET", title: "NFIB Small Business Optimism", category: "Growth", impact: "medium", consensus: "—", prior: "100.8" },
-    ],
-    Wednesday: [
-      { time: "7:00 AM ET", title: "MBA Weekly Mortgage Applications", category: "Housing", impact: "medium", consensus: "—", prior: "+1.1%" },
-      { time: "1:00 PM ET", title: "10-Year Treasury Note Auction", category: "Rates", impact: "medium", consensus: "—", prior: "—" },
-    ],
-    Thursday: [
-      { time: "8:30 AM ET", title: "Initial Jobless Claims", category: "Employment", impact: "high", consensus: "225K", prior: "218K" },
-      { time: "10:00 AM ET", title: "Existing Home Sales", category: "Housing", impact: "medium", consensus: "4.10M", prior: "4.06M" },
-    ],
-    Friday: [
-      { time: "10:00 AM ET", title: "U. Michigan Consumer Sentiment", category: "Consumer", impact: "medium", consensus: "61.5", prior: "61.7" },
-    ],
-  };
-  return days.flatMap((d) =>
-    (byWeekday[d.weekday] ?? []).map((e) => ({ ...e, date: d.date })),
-  );
-}
-
-export async function generateEconCalendar(): Promise<CalendarEvent[]> {
-  const days = next7Days();
-  const validDates = new Set(days.map((d) => d.date));
-
-  const userContent = `List the scheduled U.S. economic releases for these dates: ${days
-    .map((d) => `${d.date} (${d.weekday})`)
-    .join(", ")}.`;
-
-  const raw = await generateAiText(
-    [
-      {
-        role: "system",
-        content: [
-          "You maintain the U.S. economic release calendar. Respond ONLY with strict JSON: an array of events:",
-          '[{"date":"YYYY-MM-DD","time":"8:30 AM ET","title":string,"category":string,"impact":"high"|"medium"|"low","consensus":string,"prior":string}]',
-          "Include only well-known scheduled U.S. macro releases for the requested dates (CPI, PPI, Core PCE, Nonfarm Payrolls, ADP, Jobless Claims, FOMC minutes/decisions, Housing Starts, Building Permits, Existing/New Home Sales, Case-Shiller HPI, GDP, Retail Sales, Consumer Sentiment, MBA Mortgage Applications).",
-          'Impact: "high" for CPI / Core PCE / payrolls / FOMC / GDP, "medium" for housing / claims / retail, "low" otherwise.',
-          'consensus / prior are short strings ("3.1%", "+175K", "4.09M"); use "—" when not applicable.',
-          "Accuracy over quantity — it is fine to return few events. Skip dates with no notable releases.",
-        ].join("\n"),
-      },
-      { role: "user", content: userContent },
-    ],
-    { cacheKey: `calendar:${hashKey(userContent)}`, ttlMs: 6 * 60 * 60_000 },
-  );
-
-  const parsed = raw ? parseJsonBlock<Partial<CalendarEvent>[]>(raw, "array") : null;
-  if (!parsed) return fallbackCalendar(days);
-
-  const events: CalendarEvent[] = parsed
-    .filter(
-      (e): e is CalendarEvent & { date: string } =>
-        typeof e?.date === "string" && validDates.has(e.date) && typeof e?.title === "string",
-    )
-    .map((e) => ({
-      date: e.date,
-      time: typeof e.time === "string" ? e.time : "—",
-      title: e.title,
-      category: typeof e.category === "string" ? e.category : "Macro",
-      impact: e.impact === "high" || e.impact === "medium" || e.impact === "low" ? e.impact : "low",
-      consensus: typeof e.consensus === "string" ? e.consensus : "—",
-      prior: typeof e.prior === "string" ? e.prior : "—",
-    }))
-    .sort((a, b) => a.date.localeCompare(b.date));
-
-  return events.length ? events : fallbackCalendar(days);
-}
-
 /* ── Treasury yield curve + Fed funds probability ─────────────────────────── */
 
 export interface CurvePoint {
@@ -442,10 +197,9 @@ const CURVE_SERIES: { id: string; tenor: string; months: number }[] = [
 ];
 
 /**
- * Market-implied Fed funds path. Uses the Atlanta Fed Market Probability
- * Tracker approach in simplified form: the gap between the current effective
- * fed funds rate and the near-dated Treasury bill/note curve implies how much
- * easing or tightening is priced for the next policy meeting.
+ * Bill-implied policy gap. The distance between effective fed funds and the
+ * 3-month Treasury, minus a small term premium, is scaled into hold/cut/hike
+ * shares. This is not the Atlanta Fed Market Probability Tracker.
  */
 function impliedProbabilities(fedFunds: number, threeMonth: number): RateProbability[] {
   // ~10 bps of average bill term premium is not a policy expectation

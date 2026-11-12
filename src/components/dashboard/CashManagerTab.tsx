@@ -1,16 +1,23 @@
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import {
-  ArrowUpRight,
-  Crown,
-  Landmark,
-  PiggyBank,
-  Trophy,
-  Wallet,
-} from "lucide-react";
+import { ArrowUpRight, Crown, Landmark, PiggyBank, Shield, Trophy, Wallet } from "lucide-react";
 
+import { getAlpacaPaperLedger } from "@/lib/alpaca.functions";
 import { fetchCashManagerYields, type CashFund } from "@/lib/cash-manager";
+import {
+  CASH_MARGIN_RESERVE_USD,
+  ETF_TARGET_CAPITAL_USD,
+  cashPartitions,
+} from "@/lib/capital-book";
+import { getPaperPortfolio } from "@/lib/paper-portfolio.functions";
 import { getRatesOutlook } from "@/lib/market.functions";
+
+const usd = (n: number) =>
+  n.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  });
 
 const pct = (n: number, digits = 2) => `${n.toFixed(digits)}%`;
 
@@ -80,9 +87,9 @@ function LeaderboardRow({ fund, rank, isTop }: { fund: CashFund; rank: number; i
       <td className="py-3.5 pr-4 text-sm text-muted-foreground">{fund.fund_name}</td>
       <td className="py-3.5 pr-4">
         <span
-          className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-medium ring-1 ${
-            categoryTint(fund.category)
-          }`}
+          className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-medium ring-1 ${categoryTint(
+            fund.category,
+          )}`}
         >
           {fund.category}
         </span>
@@ -125,6 +132,21 @@ export function CashManagerTab() {
     retry: 1,
   });
 
+  const fetchPaper = useServerFn(getPaperPortfolio);
+  const paper = useQuery({
+    queryKey: ["paper-portfolio"],
+    queryFn: () => fetchPaper(),
+    staleTime: 10 * 60_000,
+    retry: 1,
+  });
+  const fetchAlpaca = useServerFn(getAlpacaPaperLedger);
+  const alpaca = useQuery({
+    queryKey: ["alpaca-paper-ledger"],
+    queryFn: () => fetchAlpaca(),
+    staleTime: 60_000,
+    retry: 1,
+  });
+
   const funds = yields.data?.funds ?? [];
   const top = funds[0];
   const summary = yields.data?.summary ?? null;
@@ -145,8 +167,69 @@ export function CashManagerTab() {
         : "FRED benchmark unavailable";
   const loading = yields.isPending;
 
+  const etfFloat = paper.data?.etfFloatRemaining ?? ETF_TARGET_CAPITAL_USD;
+  const feed = alpaca.data?.live ? (alpaca.data.optionsFeed ?? null) : null;
+  const partitions = cashPartitions({
+    etfFloatRemaining: etfFloat,
+    optionsBpUsed: feed ? feed.bpUsed : null,
+  });
+  const bpText =
+    partitions.optionsBpUsedUsd == null ? "Not live" : usd(partitions.optionsBpUsedUsd);
+  const freeText =
+    partitions.freeCollateralUsd == null ? "Not live" : usd(partitions.freeCollateralUsd);
+
   return (
     <div className="space-y-6">
+      <section className="panel p-6">
+        <div className="mb-4 flex flex-wrap items-center gap-2.5">
+          <Shield className="size-4 text-accent" />
+          <h2 className="font-display text-base font-semibold tracking-tight">
+            Collateral &amp; cash partitions
+          </h2>
+          <span className="label-caps ml-auto">Paper book · $100k</span>
+        </div>
+        <p className="mb-5 max-w-3xl text-sm text-muted-foreground">
+          The {usd(CASH_MARGIN_RESERVE_USD)} options margin reserve is permanent collateral. ETF DCA
+          float is earmarked for future factor buys and is not available for options buying power.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <MetricCard
+            icon={Shield}
+            label="Pledged options reserve"
+            value={usd(partitions.pledgedReserveUsd)}
+            note={
+              alpaca.isPending
+                ? "Loading options buying power"
+                : partitions.optionsBpUsedUsd == null
+                  ? "BP used is not live yet"
+                  : `${bpText} defined-risk BP used`
+            }
+            loading={alpaca.isPending}
+          />
+          <MetricCard
+            icon={Wallet}
+            label="Free collateral"
+            value={freeText}
+            note="Reserve minus defined-risk BP used"
+            loading={alpaca.isPending}
+          />
+          <MetricCard
+            icon={PiggyBank}
+            label="ETF DCA float"
+            value={usd(partitions.etfFloatUsd)}
+            note="Earmarked for weekly factor contributions"
+            loading={paper.isPending}
+          />
+          <MetricCard
+            icon={Landmark}
+            label="Cash bucket total"
+            value={usd(partitions.totalCashBucketUsd)}
+            note="Reserve + ETF float (counted once)"
+            loading={paper.isPending}
+          />
+        </div>
+      </section>
+
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <MetricCard
           icon={Trophy}
@@ -178,11 +261,7 @@ export function CashManagerTab() {
             Cash Yield Leaderboard — Short-Term Treasury &amp; Money Market Funds
           </h2>
           <span className="label-caps ml-auto">
-            {loading
-              ? "Loading"
-              : yields.data?.live
-                ? `Live · ${yields.data.asOf}`
-                : `Placeholder data · ${yields.data?.asOf ?? ""}`}
+            {loading ? "Loading" : yields.data?.live ? `Live · ${yields.data.asOf}` : "Unavailable"}
           </span>
         </div>
 
@@ -209,12 +288,7 @@ export function CashManagerTab() {
               </thead>
               <tbody>
                 {funds.map((fund, i) => (
-                  <LeaderboardRow
-                    key={fund.id}
-                    fund={fund}
-                    rank={i + 1}
-                    isTop={i === 0}
-                  />
+                  <LeaderboardRow key={fund.id} fund={fund} rank={i + 1} isTop={i === 0} />
                 ))}
               </tbody>
             </table>

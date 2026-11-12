@@ -5,10 +5,13 @@
  *   1) Evaluate lots that have cleared the 3-month minimum hold
  *   2) Tax-loss harvest (beta-distance substitutes to avoid wash sales)
  *   3) Hold short-term winners for LTCG unless harvested losses can offset
- *   4) Dollar-cost average $1000 into the new target weights at next-session open
- *   5) Dollar-cost average $1000 into VOO on the same fill date (benchmark)
- *   6) Reinvest dividends into the same ETF at the ex-date close, and apply splits
+ *   4) Dollar-cost average WEEKLY_CONTRIBUTION_USD ($50k/13) into target weights
+ *   5) Dollar-cost average the same amount into VOO on the same fill date
+ *   6) Rebalance a second sleeve into the passive asset mix at that week's
+ *      category weights (VOO, IJH, IJR, VEA, BND, TLT, PDBC)
+ *   7) Reinvest dividends into the same ETF at the ex-date close, and apply splits
  *      to share count and cost with no tax event
+ *   8) When selling, order lots least-gain / highest-basis first (HIFO)
  */
 
 import { supabase } from "./supabase";
@@ -19,19 +22,26 @@ import {
   type BetaVector,
 } from "./paper-portfolio-betas";
 import {
+  ASSET_MIX_PROXIES,
   ETF_CATEGORY_PEERS,
+  ETF_TARGET_CAPITAL_USD,
   LONG_TERM_DAYS,
   MIN_HOLD_DAYS,
   STRATEGY_INCEPTION_DATE,
   WASH_SALE_DAYS,
   WEEKLY_CONTRIBUTION_USD,
   WEIGHT_EPS,
+  assetMixWeights,
   categoryForTicker,
+  compareLotsLeastGainFirst,
   diffDays,
+  etfFloatRemainingUsd,
   identicalSet,
   nextBusinessDayAfter,
   taxLedgerTrades,
 } from "./paper-portfolio-rules";
+
+export type SleeveId = "factor" | "voo" | "mix";
 
 export interface PaperWeeklyPoint {
   runDate: string;
@@ -44,6 +54,10 @@ export interface PaperWeeklyPoint {
   vooCostBasis: number;
   vooReturnPct: number;
   alphaPct: number;
+  mixValue: number;
+  mixCostBasis: number;
+  mixReturnPct: number;
+  mixAlphaPct: number;
 }
 
 export interface PaperPortfolioSnapshot {
@@ -64,14 +78,25 @@ export interface PaperPortfolioSnapshot {
     returnPct: number;
     cash: number;
   };
+  mix: {
+    marketValue: number;
+    costBasis: number;
+    returnPct: number;
+    cash: number;
+  };
   tax: {
     factor: SleeveTaxPosition;
     voo: SleeveTaxPosition;
+    mix: SleeveTaxPosition;
   };
   openLots: number;
   recentTrades: PaperTrade[];
   weeklySeries: PaperWeeklyPoint[];
   notes: string[];
+  /** Undeployed portion of the $50k ETF target still parked for future DCA weeks. */
+  etfFloatRemaining: number;
+  etfTargetCapital: number;
+  weeklyContribution: number;
 }
 
 export interface SleeveTaxPosition {
@@ -104,12 +129,12 @@ export interface PaperTrade {
   price: number;
   amount: number;
   reason: string;
-  strategy: "factor" | "voo";
+  strategy: SleeveId;
 }
 
 interface Lot {
   id: string;
-  strategy: "factor" | "voo";
+  strategy: SleeveId;
   ticker: string;
   shares: number;
   costPerShare: number;
@@ -133,11 +158,14 @@ interface SimState {
   cumRealizedLosses: number;
   cashFactor: number;
   cashVoo: number;
+  cashMix: number;
   /** Dividend cash waiting to be reinvested in the same ticker, keyed by ticker. */
   dripFactor: Record<string, number>;
   dripVoo: Record<string, number>;
+  dripMix: Record<string, number>;
   distributionsFactor: number;
   distributionsVoo: number;
+  distributionsMix: number;
   notes: string[];
 }
 
@@ -159,7 +187,7 @@ interface SplitEvent {
 }
 
 interface DividendCredit {
-  strategy: "factor" | "voo";
+  strategy: SleeveId;
   ticker: string;
   dollars: number;
 }
@@ -188,7 +216,7 @@ function parseSplitRatio(raw: {
   }
   if (typeof raw.splitRatio === "string" && raw.splitRatio.includes(":")) {
     const [num, den] = raw.splitRatio.split(":").map((part) => Number(part));
-    if (num > 0 && den > 0) return num / den;
+    if (num !== undefined && den !== undefined && num > 0 && den > 0) return num / den;
   }
   if (
     typeof raw.numerator === "number" &&
@@ -479,7 +507,7 @@ function chooseSubstitute(
 
 function buy(
   state: SimState,
-  strategy: "factor" | "voo",
+  strategy: SleeveId,
   ticker: string,
   dollars: number,
   date: string,
@@ -519,12 +547,25 @@ function evaluateExits(
   prices: Map<string, Map<string, QuoteBar>>,
   betas: Map<string, BetaVector>,
 ) {
-  const candidates = state.lots.filter(
-    (lot) => lot.strategy === "factor" && diffDays(lot.openedOn, asOf) >= MIN_HOLD_DAYS,
+  const priced = new Map<string, number>();
+  const candidates = state.lots.filter((lot) => {
+    if (lot.strategy !== "factor") return false;
+    if (diffDays(lot.openedOn, asOf) < MIN_HOLD_DAYS) return false;
+    const px = priceOnOrBefore(prices.get(lot.ticker), asOf, "open");
+    if (px == null) return false;
+    priced.set(lot.ticker, px);
+    return true;
+  });
+
+  // Least unrealized gain / highest cost basis first when reallocating.
+  candidates.sort((a, b) =>
+    compareLotsLeastGainFirst(a, b, priced.get(a.ticker)!, priced.get(b.ticker)!),
   );
 
   for (const lot of candidates) {
-    const px = priceOnOrBefore(prices.get(lot.ticker), asOf, "open");
+    // Lot may already have been closed earlier in this pass.
+    if (!state.lots.some((open) => open.id === lot.id)) continue;
+    const px = priced.get(lot.ticker) ?? priceOnOrBefore(prices.get(lot.ticker), asOf, "open");
     if (px == null) continue;
     const mtm = lot.shares * px;
     const cost = lot.shares * lot.costPerShare;
@@ -564,13 +605,12 @@ function evaluateExits(
       continue;
     }
 
-    // Winner
+    // Winner — prefer holding STCG lots; if we must sell, least-gain lots go first.
     if (age < LONG_TERM_DAYS) {
       const offset = availableLossOffset(state);
       if (!stillAllocated && pnl > 0 && offset >= pnl) {
         recordSale(state, lot, asOf, px, "gain_offset_by_harvested_losses");
       }
-      // else hold for long-term capital gains treatment
       continue;
     }
 
@@ -616,10 +656,135 @@ function deployContribution(
     state.cashVoo = vooCash;
     state.notes.push(`VOO cash uninvested on ${fillDate} (missing open).`);
   }
+
+  deployAssetMix(state, runDate, fillDate, weights, prices);
 }
 
-function dripBook(state: SimState, strategy: "factor" | "voo"): Record<string, number> {
-  return strategy === "voo" ? state.dripVoo : state.dripFactor;
+function mixShares(state: SimState, ticker: string): number {
+  let shares = 0;
+  for (const lot of state.lots) {
+    if (lot.strategy === "mix" && lot.ticker === ticker) shares += lot.shares;
+  }
+  return shares;
+}
+
+/** Sell mix-sleeve shares without touching the factor wash-sale book. */
+function sellMixShares(
+  state: SimState,
+  ticker: string,
+  sharesToSell: number,
+  date: string,
+  price: number,
+  reason: string,
+): number {
+  let left = sharesToSell;
+  let proceeds = 0;
+  const lots = state.lots
+    .filter((lot) => lot.strategy === "mix" && lot.ticker === ticker)
+    .sort((a, b) => compareLotsLeastGainFirst(a, b, price, price));
+  for (const lot of lots) {
+    if (left <= 1e-8) break;
+    const qty = Math.min(lot.shares, left);
+    const part = qty * price;
+    const pnl = part - qty * lot.costPerShare;
+    if (qty >= lot.shares - 1e-8) {
+      state.lots = state.lots.filter((open) => open.id !== lot.id);
+      state.closed.push({
+        ...lot,
+        closedOn: date,
+        closePrice: price,
+        realizedPnl: pnl,
+        reason,
+      });
+    } else {
+      lot.shares -= qty;
+      state.closed.push({
+        ...lot,
+        id: `${lot.id}-sell-${date}-${state.closed.length}`,
+        shares: qty,
+        closedOn: date,
+        closePrice: price,
+        realizedPnl: pnl,
+        reason,
+      });
+    }
+    state.trades.push({
+      date,
+      ticker,
+      side: "sell",
+      shares: qty,
+      price,
+      amount: part,
+      reason,
+      strategy: "mix",
+    });
+    proceeds += part;
+    left -= qty;
+  }
+  return proceeds;
+}
+
+/**
+ * Rebalance the passive mix to this week's collapsed category weights, then
+ * invest the new weekly contribution. Sells happen before buys so the sleeve matches the mix.
+ */
+function deployAssetMix(
+  state: SimState,
+  runDate: string,
+  fillDate: string,
+  weights: WeightMap,
+  prices: Map<string, Map<string, QuoteBar>>,
+) {
+  const targets = assetMixWeights(weights);
+  const names = new Set<string>([...ASSET_MIX_PROXIES]);
+  for (const lot of state.lots) {
+    if (lot.strategy === "mix") names.add(lot.ticker);
+  }
+
+  const opens = new Map<string, number | null>();
+  const values = new Map<string, number>();
+  let nav = state.cashMix + WEEKLY_CONTRIBUTION_USD;
+  for (const ticker of names) {
+    const open = priceOnOrBefore(prices.get(ticker), fillDate, "open");
+    opens.set(ticker, open);
+    const shares = mixShares(state, ticker);
+    const value = open != null ? shares * open : 0;
+    values.set(ticker, value);
+    nav += value;
+  }
+
+  let cash = state.cashMix + WEEKLY_CONTRIBUTION_USD;
+  state.cashMix = 0;
+
+  for (const ticker of names) {
+    const open = opens.get(ticker);
+    const current = values.get(ticker) ?? 0;
+    const target = nav * ((targets as Partial<Record<string, number>>)[ticker] ?? 0);
+    if (open == null || current <= target + 1) continue;
+    const shares = (current - target) / open;
+    const proceeds = sellMixShares(state, ticker, shares, fillDate, open, "mix_rebalance");
+    cash += proceeds;
+    values.set(ticker, current - proceeds);
+  }
+
+  for (const proxy of ASSET_MIX_PROXIES) {
+    const open = opens.get(proxy);
+    const current = values.get(proxy) ?? 0;
+    const target = nav * (targets[proxy] ?? 0);
+    if (open == null || target <= current + 1) continue;
+    const spend = Math.min(target - current, cash);
+    if (spend <= 1) continue;
+    buy(state, "mix", proxy, spend, fillDate, runDate, open, "weekly_mix_dca");
+    cash -= spend;
+  }
+
+  state.cashMix = cash;
+}
+
+function dripBook(state: SimState, strategy: SleeveId): Record<string, number> {
+  if (strategy === "voo") return state.dripVoo;
+  if (strategy === "mix") return state.dripMix;
+  return state.dripFactor;
 }
 
 function dripCashTotal(book: Record<string, number>): number {
@@ -645,18 +810,15 @@ function dividendEntitlements(state: SimState, market: MarketData, date: string)
   for (const [ticker, events] of market.dividends) {
     for (const dividend of events) {
       if (dividend.date !== date || dividend.amount <= 0) continue;
-      let factorShares = 0;
-      let vooShares = 0;
+      const shares: Record<SleeveId, number> = { factor: 0, voo: 0, mix: 0 };
       for (const lot of state.lots) {
         if (lot.ticker !== ticker || lot.openedOn >= date) continue;
-        if (lot.strategy === "voo") vooShares += lot.shares;
-        else factorShares += lot.shares;
+        shares[lot.strategy] += lot.shares;
       }
-      if (factorShares > 0) {
-        credits.push({ strategy: "factor", ticker, dollars: factorShares * dividend.amount });
-      }
-      if (vooShares > 0) {
-        credits.push({ strategy: "voo", ticker, dollars: vooShares * dividend.amount });
+      for (const strategy of ["factor", "voo", "mix"] as const) {
+        if (shares[strategy] > 0) {
+          credits.push({ strategy, ticker, dollars: shares[strategy] * dividend.amount });
+        }
       }
     }
   }
@@ -669,12 +831,13 @@ function creditDividends(state: SimState, credits: DividendCredit[]) {
     const book = dripBook(state, credit.strategy);
     book[credit.ticker] = (book[credit.ticker] ?? 0) + credit.dollars;
     if (credit.strategy === "voo") state.distributionsVoo += credit.dollars;
+    else if (credit.strategy === "mix") state.distributionsMix += credit.dollars;
     else state.distributionsFactor += credit.dollars;
   }
 }
 
 function deployDripCash(state: SimState, market: MarketData, date: string) {
-  for (const strategy of ["factor", "voo"] as const) {
+  for (const strategy of ["factor", "voo", "mix"] as const) {
     const book = dripBook(state, strategy);
     for (const ticker of Object.keys(book)) {
       const dollars = book[ticker] ?? 0;
@@ -744,14 +907,19 @@ function walkSessions(
 function markToMarket(state: SimState, asOf: string, bars: Map<string, Map<string, QuoteBar>>) {
   const factorDrip = dripCashTotal(state.dripFactor);
   const vooDrip = dripCashTotal(state.dripVoo);
+  const mixDrip = dripCashTotal(state.dripMix);
   let stratMv = state.cashFactor + factorDrip;
   let stratCost = state.cashFactor + factorDrip;
   let vooMv = state.cashVoo + vooDrip;
   let vooCost = state.cashVoo + vooDrip;
+  let mixMv = state.cashMix + mixDrip;
+  let mixCost = state.cashMix + mixDrip;
   let factorUnrealizedGain = 0;
   let factorUnrealizedLoss = 0;
   let vooUnrealizedGain = 0;
   let vooUnrealizedLoss = 0;
+  let mixUnrealizedGain = 0;
+  let mixUnrealizedLoss = 0;
 
   for (const lot of state.lots) {
     const px =
@@ -765,6 +933,11 @@ function markToMarket(state: SimState, asOf: string, bars: Map<string, Map<strin
       vooCost += cost;
       if (pnl >= 0) vooUnrealizedGain += pnl;
       else vooUnrealizedLoss += -pnl;
+    } else if (lot.strategy === "mix") {
+      mixMv += mtm;
+      mixCost += cost;
+      if (pnl >= 0) mixUnrealizedGain += pnl;
+      else mixUnrealizedLoss += -pnl;
     } else {
       stratMv += mtm;
       stratCost += cost;
@@ -778,14 +951,18 @@ function markToMarket(state: SimState, asOf: string, bars: Map<string, Map<strin
     stratCost,
     vooMv,
     vooCost,
+    mixMv,
+    mixCost,
     factorUnrealizedGain,
     factorUnrealizedLoss,
     vooUnrealizedGain,
     vooUnrealizedLoss,
+    mixUnrealizedGain,
+    mixUnrealizedLoss,
   };
 }
 
-function realizedFor(state: SimState, strategy: "factor" | "voo") {
+function realizedFor(state: SimState, strategy: SleeveId) {
   let gains = 0;
   let losses = 0;
   for (const lot of state.closed) {
@@ -799,7 +976,7 @@ function realizedFor(state: SimState, strategy: "factor" | "voo") {
 
 function sleeveTax(
   state: SimState,
-  strategy: "factor" | "voo",
+  strategy: SleeveId,
   unrealizedGains: number,
   unrealizedLosses: number,
 ): SleeveTaxPosition {
@@ -811,7 +988,12 @@ function sleeveTax(
     unrealizedGains,
     unrealizedLosses,
     netUnrealized: unrealizedGains - unrealizedLosses,
-    distributions: strategy === "voo" ? state.distributionsVoo : state.distributionsFactor,
+    distributions:
+      strategy === "voo"
+        ? state.distributionsVoo
+        : strategy === "mix"
+          ? state.distributionsMix
+          : state.distributionsFactor,
   };
 }
 
@@ -843,14 +1025,24 @@ function summarize(
       returnPct: totalContributed > 0 ? (mtm.vooMv / totalContributed - 1) * 100 : 0,
       cash: state.cashVoo + dripCashTotal(state.dripVoo),
     },
+    mix: {
+      marketValue: mtm.mixMv,
+      costBasis: mtm.mixCost,
+      returnPct: totalContributed > 0 ? (mtm.mixMv / totalContributed - 1) * 100 : 0,
+      cash: state.cashMix + dripCashTotal(state.dripMix),
+    },
     tax: {
       factor: sleeveTax(state, "factor", mtm.factorUnrealizedGain, mtm.factorUnrealizedLoss),
       voo: sleeveTax(state, "voo", mtm.vooUnrealizedGain, mtm.vooUnrealizedLoss),
+      mix: sleeveTax(state, "mix", mtm.mixUnrealizedGain, mtm.mixUnrealizedLoss),
     },
     openLots: state.lots.filter((l) => l.strategy === "factor").length,
     recentTrades: taxLedgerTrades(state.trades),
     weeklySeries,
     notes: state.notes.slice(-8),
+    etfFloatRemaining: etfFloatRemainingUsd(runCount),
+    etfTargetCapital: ETF_TARGET_CAPITAL_USD,
+    weeklyContribution: WEEKLY_CONTRIBUTION_USD,
   };
 }
 
@@ -863,14 +1055,19 @@ function emptySnapshot(notes: string[]): PaperPortfolioSnapshot {
     totalContributed: 0,
     strategy: { marketValue: 0, costBasis: 0, returnPct: 0, cash: 0 },
     voo: { marketValue: 0, costBasis: 0, returnPct: 0, cash: 0 },
+    mix: { marketValue: 0, costBasis: 0, returnPct: 0, cash: 0 },
     tax: {
       factor: zeroSleeveTax(),
       voo: zeroSleeveTax(),
+      mix: zeroSleeveTax(),
     },
     openLots: 0,
     recentTrades: [],
     weeklySeries: [],
     notes,
+    etfFloatRemaining: ETF_TARGET_CAPITAL_USD,
+    etfTargetCapital: ETF_TARGET_CAPITAL_USD,
+    weeklyContribution: WEEKLY_CONTRIBUTION_USD,
   };
 }
 
@@ -882,7 +1079,7 @@ export async function simulatePaperPortfolio(): Promise<PaperPortfolioSnapshot> 
     ]);
   }
 
-  const tickers = new Set<string>(["VOO", ...FACTOR_PROXY_TICKERS]);
+  const tickers = new Set<string>([...ASSET_MIX_PROXIES, ...FACTOR_PROXY_TICKERS]);
   for (const run of history) {
     for (const t of Object.keys(run.weights)) tickers.add(t);
     for (const peers of Object.values(ETF_CATEGORY_PEERS)) {
@@ -916,10 +1113,13 @@ export function simulateLoadedBook(
     cumRealizedLosses: 0,
     cashFactor: 0,
     cashVoo: 0,
+    cashMix: 0,
     dripFactor: {},
     dripVoo: {},
+    dripMix: {},
     distributionsFactor: 0,
     distributionsVoo: 0,
+    distributionsMix: 0,
     notes: [
       `Catch-up replay from model inception ${STRATEGY_INCEPTION_DATE} through ${asOf}.`,
       "TLH substitutes ranked by Euclidean distance in estimated factor-beta space.",
@@ -963,6 +1163,7 @@ export function simulateLoadedBook(
     const mtm = markToMarket(state, fillDate, market.bars);
     const strategyReturnPct = contributed > 0 ? (mtm.stratMv / contributed - 1) * 100 : 0;
     const vooReturnPct = contributed > 0 ? (mtm.vooMv / contributed - 1) * 100 : 0;
+    const mixReturnPct = contributed > 0 ? (mtm.mixMv / contributed - 1) * 100 : 0;
     weeklySeries.push({
       runDate: run.date,
       fillDate,
@@ -974,6 +1175,10 @@ export function simulateLoadedBook(
       vooCostBasis: mtm.vooCost,
       vooReturnPct,
       alphaPct: strategyReturnPct - vooReturnPct,
+      mixValue: mtm.mixMv,
+      mixCostBasis: mtm.mixCost,
+      mixReturnPct,
+      mixAlphaPct: strategyReturnPct - mixReturnPct,
     });
   }
 

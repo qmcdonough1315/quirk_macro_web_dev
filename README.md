@@ -9,32 +9,24 @@
 
 ## Key Platform Modules & Tabs
 
-### 1. Get Your Macros
-* **Purpose:** Centralizes fragmented macroeconomic datasets (FRED, Federal Reserve releases, inflation indices, and government reports) into a single high-density dashboard.
-* **Key Components:** 10Y Treasury Yield tracking, GDP Growth (QoQ annualized), Core PCE, the Treasury Yield Curve, Atlanta Fed rate cut/hike probabilities, a past week economic recap, and a 7-day upcoming release calendar.
+### 1. Wealth Management
+* **Purpose:** Turns the latest factor-model run into an allocation that can be checked against a VOO paper sleeve.
+* **Key Components:** Authored weekly regime read, 3-month factor excess returns, target ETF weights, and the paper book published by the model job.
 
-### 2. Housing Data
-* **Purpose:** Isolates macro housing metrics and interest rate conditions to evaluate overall real estate lending and market dynamics.
-* **Key Components:** 30Y Fixed Mortgage Rates, Primary/Secondary Spreads, FHFA House Price Index (QoQ), Trailing 12-Month Rates & Yields chart, Liquidity Indicators, and Buyer vs. Seller Advantage signals.
+### 2. Cash Engine
+* **Purpose:** Ranks short-duration Treasury and money market funds by 30-day SEC yield.
+* **Key Components:** Live leaderboard, expense ratios, and the 3-month T-bill when FRED is available.
 
-### 3. Local Market Explorer
-* **Purpose:** Bypasses clunky, transactional real estate scrolling to deliver rapid, on-the-go geographical trend snapshots via ZIP Code or City search (including dual mapping for Washington, DC).
-* **Key Components:** Micro-market pricing metrics, local inventory velocity, neighborhood AI summaries, and hyperlinked "Hot Properties" driving traffic directly to live listings on Redfin, Zillow, or Realtor.com.
-
-### 4. Factor Beta Predictions
-* **Purpose:** Bridges academic quantitative finance and practical portfolio allocation by modeling asset exposure to baseline risk factors.
-* **Key Components:** 3-month predicted factor excess returns (Mkt-Rf, SMB, HML, RMW, CMA, WML), a 10-ETF hold-period portfolio with target weights and Sharpe ratio estimates, an AI macro regime summary, and historical performance tracking.
-
-### 5. Cash Manager Engine
-* **Purpose:** Eliminates yield drag on idle capital by automatically tracking and ranking short-duration Treasury and money market funds.
-* **Key Components:** A weekly leaderboard ranking top short-term liquidity funds by 30-Day SEC Yield, expense ratio comparisons, distribution frequencies, and direct trade action links.
+### 3. Get Your Macros
+* **Purpose:** Shows the rates that explain the week, including the 30-year mortgage.
+* **Key Components:** 30-year fixed mortgage, 10-year Treasury, mortgage-minus-10-year spread, GDP year over year, Core PCE, the Treasury curve, a bill-implied fed-funds gap, and the authored weekly recap. Missing feeds stay blank.
 
 ---
 
 ## System Architecture & Data Pipeline
-* **Frontend:** React scaffolded with Vite and styled using utility-first Tailwind CSS for clean, high-density financial layouts.
-* **Backend:** Supabase relational tables storing merged Census, real estate, and financial metric records.
-* **Automation:** Automated Python ingestion pipelines (`merge_data.py`) running via GitHub Actions to continuously update datasets on a weekly schedule.
+* **Frontend:** React scaffolded with Vite and styled using utility-first Tailwind CSS.
+* **Backend:** Supabase tables written by the weekly model and cash jobs. Live rates are read from FRED.
+* **Automation:** The ETF quant model publishes factor runs and the paper book. Missing feeds stay blank in the UI.
 
 ---
 

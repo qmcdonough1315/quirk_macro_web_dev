@@ -1,103 +1,66 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
-import { Activity, ChevronDown } from "lucide-react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { Activity } from "lucide-react";
 
+import { SummaryTab } from "@/components/dashboard/SummaryTab";
 import { MacroTab } from "@/components/dashboard/MacroTab";
-import { HousingTab } from "@/components/dashboard/HousingTab";
-import { LocalTab } from "@/components/dashboard/LocalTab";
 import { FactorBetaTab } from "@/components/dashboard/FactorBetaTab";
+import { OptionsBookTab } from "@/components/dashboard/OptionsBookTab";
 import { CashManagerTab } from "@/components/dashboard/CashManagerTab";
 import { AboutTab } from "@/components/dashboard/AboutTab";
 
+const TABS = ["summary", "factors", "options", "cash", "macros", "about"] as const;
+type TabId = (typeof TABS)[number];
+
+function parseTab(value: unknown): TabId {
+  return TABS.includes(value as TabId) ? (value as TabId) : "summary";
+}
+
 export const Route = createFileRoute("/")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    tab: parseTab(search["tab"]),
+  }),
   head: () => ({
     meta: [
-      { title: "Quirk Macro — Macro & Local Housing Dashboard" },
+      { title: "Quirk Macro — Personal Financial Analytics" },
       {
         name: "description",
         content:
-          "Institutional-grade dashboard tracking mortgage rates, Treasury yields, credit conditions, and local housing market affordability.",
+          "Paper book overview across the ETF factor model, options sleeve, cash engine, and macro regime.",
       },
-      { property: "og:title", content: "Quirk Macro — Macro & Local Housing Dashboard" },
+      { property: "og:title", content: "Quirk Macro — Personal Financial Analytics" },
       {
         property: "og:description",
         content:
-          "Institutional-grade dashboard tracking mortgage rates, Treasury yields, credit conditions, and local housing market affordability.",
+          "Paper book overview across the ETF factor model, options sleeve, cash engine, and macro regime.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      { property: "og:image", content: "https://quirkmacro.lovable.app/og-image.png" },
-      { name: "twitter:image", content: "https://quirkmacro.lovable.app/og-image.png" },
     ],
   }),
   component: Dashboard,
 });
 
-type SubTabId = "macros" | "housing" | "local" | "factors" | "cash" | "about";
-
-interface SubTab {
-  id: SubTabId;
-  label: string;
-}
-
-interface NavGroup {
-  id: string;
-  label: string;
-  subtabs: SubTab[];
-}
-
-const nav: (NavGroup | SubTab)[] = [
-  { id: "factors", label: "Wealth Management" },
+const NAV: { id: TabId; label: string }[] = [
+  { id: "summary", label: "Summary" },
+  { id: "factors", label: "ETF Model" },
+  { id: "options", label: "Options Book" },
   { id: "cash", label: "Cash Engine" },
-  { id: "macros", label: "Get Your Macros" },
-  {
-    id: "housing-group",
-    label: "Housing Market Explorer",
-    subtabs: [
-      { id: "local", label: "Local Market Explorer" },
-      { id: "housing", label: "Housing Data" },
-    ],
-  },
+  { id: "macros", label: "Macros" },
   { id: "about", label: "About" },
 ];
 
-const isGroup = (item: NavGroup | SubTab): item is NavGroup => "subtabs" in item;
-
 function Dashboard() {
-  const [tab, setTab] = useState<SubTabId>("factors");
-  const [openGroup, setOpenGroup] = useState<string | null>(null);
-  const navRef = useRef<HTMLElement>(null);
+  const { tab } = Route.useSearch();
+  const navigate = useNavigate({ from: Route.fullPath });
 
-  const activeGroup = nav.find(
-    (item): item is NavGroup => isGroup(item) && item.subtabs.some((s) => s.id === tab),
-  );
-
-  // Close open menus on outside tap or Escape (needed for touch devices).
-  useEffect(() => {
-    if (!openGroup) return;
-    const onPointerDown = (e: PointerEvent) => {
-      if (navRef.current && !navRef.current.contains(e.target as Node)) setOpenGroup(null);
-    };
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpenGroup(null);
-    };
-    document.addEventListener("pointerdown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("pointerdown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [openGroup]);
-
-  const selectTab = (id: SubTabId) => {
-    setTab(id);
-    setOpenGroup(null);
+  const selectTab = (id: TabId) => {
+    void navigate({ search: { tab: id } });
   };
 
   return (
     <div className="min-h-screen grid-backdrop">
       <header className="border-b border-border/70 bg-background/70 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-4 px-6 py-5">
+        <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-3 sm:px-6 sm:py-5">
           <div className="flex items-center gap-3">
             <span className="flex size-9 items-center justify-center rounded-lg bg-accent/12 ring-1 ring-accent/30">
               <Activity className="size-4 text-accent" />
@@ -106,133 +69,57 @@ function Dashboard() {
               <h1 className="font-display text-lg font-semibold leading-none tracking-tight">
                 Quirk Macro Analytics
               </h1>
-              <p className="mt-1.5 text-xs text-muted-foreground">
+              <p className="mt-1.5 hidden text-xs text-muted-foreground sm:block">
                 Personal Financial Analytics Terminal
               </p>
             </div>
           </div>
         </div>
 
-        <div className="mx-auto max-w-7xl px-6">
-          <nav
-            ref={navRef}
-            className="flex flex-wrap gap-1 overflow-visible"
-            aria-label="Dashboard sections"
-          >
-            {nav.map((item) =>
-              isGroup(item) ? (
-                <div
-                  key={item.id}
-                  className="group relative"
-                  onMouseEnter={() => setOpenGroup(item.id)}
-                  onMouseLeave={() => setOpenGroup(null)}
-                >
-                  <button
-                    type="button"
-                    aria-haspopup="true"
-                    aria-expanded={openGroup === item.id}
-                    onClick={() => {
-                      if (!item.subtabs.some((s) => s.id === tab)) setTab(item.subtabs[0].id);
-                      setOpenGroup(openGroup === item.id ? null : item.id);
-                    }}
-                    className={`-mb-px flex items-center gap-1.5 whitespace-nowrap border-b-2 px-4 py-3 font-display text-sm font-medium tracking-tight transition-colors ${
-                      activeGroup?.id === item.id
-                        ? "border-accent text-foreground"
-                        : "border-transparent text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {item.label}
-                    <ChevronDown
-                      className={`size-3.5 opacity-60 transition-transform ${
-                        openGroup === item.id ? "rotate-180" : ""
-                      }`}
-                    />
-                  </button>
-                  <div
-                    className={`absolute left-0 top-full z-30 min-w-[220px] rounded-lg border border-border bg-background p-1.5 shadow-lg transition-all ${
-                      openGroup === item.id
-                        ? "visible translate-y-0 opacity-100"
-                        : "invisible translate-y-1 opacity-0"
-                    }`}
-                  >
-                    {item.subtabs.map((s) => (
-                      <button
-                        key={s.id}
-                        type="button"
-                        onClick={() => selectTab(s.id)}
-                        className={`flex w-full items-center rounded-md px-3 py-2.5 text-left font-display text-sm font-medium tracking-tight transition-colors ${
-                          tab === s.id
-                            ? "bg-accent/12 text-accent"
-                            : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
-                        }`}
-                      >
-                        {s.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <button
-                  key={item.id}
-                  type="button"
-                  aria-selected={tab === item.id}
-                  onClick={() => selectTab(item.id)}
-                  className={`-mb-px whitespace-nowrap border-b-2 px-4 py-3 font-display text-sm font-medium tracking-tight transition-colors ${
-                    tab === item.id
-                      ? "border-accent text-foreground"
-                      : "border-transparent text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  {item.label}
-                </button>
-              ),
-            )}
+        <div className="mx-auto max-w-7xl px-4 sm:px-6">
+          <nav className="flex gap-1 overflow-x-auto" aria-label="Dashboard sections">
+            {NAV.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                aria-current={tab === item.id ? "page" : undefined}
+                onClick={() => selectTab(item.id)}
+                className={`-mb-px shrink-0 whitespace-nowrap border-b-2 px-4 py-3 font-display text-sm font-medium tracking-tight transition-colors ${
+                  tab === item.id
+                    ? "border-accent text-foreground"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
           </nav>
         </div>
-
-        {activeGroup ? (
-          <div className="border-t border-border/50 bg-secondary/30">
-            <div className="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-6 py-1.5">
-              {activeGroup.subtabs.map((s) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  aria-selected={tab === s.id}
-                  onClick={() => selectTab(s.id)}
-                  className={`whitespace-nowrap rounded-md px-3.5 py-2.5 font-display text-xs font-medium tracking-tight transition-colors ${
-                    tab === s.id
-                      ? "bg-accent/12 text-accent ring-1 ring-accent/30"
-                      : "text-muted-foreground hover:bg-secondary/70 hover:text-foreground"
-                  }`}
-                >
-                  {s.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        ) : null}
       </header>
 
-      <main className="mx-auto max-w-7xl px-6 py-8">
-        {tab === "housing" ? (
-          <HousingTab />
-        ) : tab === "macros" ? (
-          <MacroTab />
-        ) : tab === "local" ? (
-          <LocalTab />
+      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
+        {tab === "summary" ? (
+          <SummaryTab />
         ) : tab === "factors" ? (
           <FactorBetaTab />
+        ) : tab === "options" ? (
+          <OptionsBookTab />
         ) : tab === "cash" ? (
           <CashManagerTab />
+        ) : tab === "macros" ? (
+          <MacroTab />
         ) : (
           <AboutTab />
         )}
       </main>
 
       <footer className="border-t border-border/70">
-        <div className="mx-auto max-w-7xl px-6 py-5">
+        <div className="mx-auto max-w-7xl space-y-2 px-4 py-5 sm:px-6">
           <p className="text-xs text-muted-foreground">
-            Data powered by FRED API, U.S. Treasury, and FHFA.
+            Not investment advice. For informational and educational purposes only.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Rates from FRED. Model and cash figures from the weekly data jobs.
           </p>
         </div>
       </footer>

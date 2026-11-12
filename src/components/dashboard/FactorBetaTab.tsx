@@ -22,9 +22,11 @@ import {
 import {
   STRATEGY_INCEPTION_DATE,
   WEEKLY_CONTRIBUTION_USD,
+  annualizedAlphaPct,
   taxLedgerTrades,
 } from "@/lib/paper-portfolio-rules";
 import { RegimeRead } from "@/components/dashboard/RegimeRead";
+import { useNavigate } from "@tanstack/react-router";
 
 const pct = (n: number | null | undefined, digits = 2) =>
   typeof n === "number" && Number.isFinite(n) ? `${n > 0 ? "+" : ""}${n.toFixed(digits)}%` : "—";
@@ -41,6 +43,74 @@ const usd = (n: number | null | undefined, digits = 0) =>
         maximumFractionDigits: digits,
       })
     : "—";
+
+function AlphaLine({ label, value }: { label: string; value: number | null }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span
+        className={`font-display text-2xl font-semibold tabular-nums tracking-tight ${
+          value === null ? "text-muted-foreground" : value >= 0 ? "text-positive" : "text-negative"
+        }`}
+      >
+        {pct(value, 1)}
+      </span>
+    </div>
+  );
+}
+
+function AnnualizedAlphaTile({
+  paper,
+  isPending,
+}: {
+  paper: PaperPortfolioSnapshot | undefined;
+  isPending: boolean;
+}) {
+  const contributions =
+    paper?.live && paper.weeklySeries.length
+      ? paper.weeklySeries.map((row) => ({
+          date: row.fillDate,
+          amount: WEEKLY_CONTRIBUTION_USD,
+        }))
+      : null;
+  const vsVoo = contributions
+    ? annualizedAlphaPct({
+        contributions,
+        asOf: paper!.asOf,
+        factorValue: paper!.strategy.marketValue,
+        benchmarkValue: paper!.voo.marketValue,
+      })
+    : null;
+  const vsMix = contributions
+    ? annualizedAlphaPct({
+        contributions,
+        asOf: paper!.asOf,
+        factorValue: paper!.strategy.marketValue,
+        benchmarkValue: paper!.mix.marketValue,
+      })
+    : null;
+  const since = new Date(`${STRATEGY_INCEPTION_DATE}T00:00:00Z`).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+
+  return (
+    <div className="flex w-full shrink-0 flex-col justify-center rounded-lg border border-border/70 bg-secondary/20 px-4 py-5 lg:w-56 lg:self-center">
+      <p className="label-caps text-center">Annualized alpha</p>
+      {isPending ? (
+        <div className="mt-3 h-16 animate-pulse rounded-md bg-secondary/70" />
+      ) : (
+        <div className="mt-3 space-y-2">
+          <AlphaLine label="vs VOO" value={vsVoo} />
+          <AlphaLine label="vs mix" value={vsMix} />
+        </div>
+      )}
+      <p className="mt-3 text-center text-xs text-muted-foreground">Since {since}</p>
+    </div>
+  );
+}
 
 function DeltaBadge({ value }: { value: number }) {
   const good = value >= 0;
@@ -232,9 +302,11 @@ function taxTone(kind: "gain" | "loss" | "signed", value: number): string {
 function TaxComparison({
   factor,
   voo,
+  mix,
 }: {
   factor: SleeveTaxPosition | undefined;
   voo: SleeveTaxPosition | undefined;
+  mix: SleeveTaxPosition | undefined;
 }) {
   const empty: SleeveTaxPosition = {
     realizedGains: 0,
@@ -247,46 +319,87 @@ function TaxComparison({
   };
   const factorBook = factor ?? empty;
   const vooBook = voo ?? empty;
+  const mixBook = mix ?? empty;
+  const books = [
+    { label: "Factor", book: factorBook },
+    { label: "VOO", book: vooBook },
+    { label: "Mix", book: mixBook },
+  ];
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[520px] text-sm">
+      <table className="w-full min-w-[760px] text-sm">
         <thead>
           <tr className="border-b border-border text-left">
             <th className="label-caps py-2.5 pr-4">Cumulative position</th>
-            <th className="label-caps py-2.5 pr-4 text-right">Factor</th>
-            <th className="label-caps py-2.5 pr-4 text-right">VOO</th>
-            <th className="label-caps py-2.5 text-right">Factor − VOO</th>
+            {books.map((column) => (
+              <th key={column.label} className="label-caps py-2.5 pr-4 text-right">
+                {column.label}
+              </th>
+            ))}
+            <th className="label-caps py-2.5 pr-4 text-right">Factor − VOO</th>
+            <th className="label-caps py-2.5 text-right">Factor − Mix</th>
           </tr>
         </thead>
         <tbody>
           {TAX_ROWS.map((row) => {
             const factorValue = factorBook[row.key];
             const vooValue = vooBook[row.key];
-            const delta = factorValue - vooValue;
+            const mixValue = mixBook[row.key];
             return (
               <tr key={row.key} className="border-b border-border/50 last:border-0">
                 <td className="py-2.5 pr-4 text-muted-foreground">{row.label}</td>
+                {books.map((column) => {
+                  const value = column.book[row.key];
+                  return (
+                    <td
+                      key={column.label}
+                      className={`py-2.5 pr-4 text-right font-mono tabular-nums ${taxTone(row.kind, value)}`}
+                    >
+                      {usd(value)}
+                    </td>
+                  );
+                })}
                 <td
-                  className={`py-2.5 pr-4 text-right font-mono tabular-nums ${taxTone(row.kind, factorValue)}`}
+                  className={`py-2.5 pr-4 text-right font-mono tabular-nums ${taxTone("signed", factorValue - vooValue)}`}
                 >
-                  {usd(factorValue)}
+                  {usd(factorValue - vooValue)}
                 </td>
                 <td
-                  className={`py-2.5 pr-4 text-right font-mono tabular-nums ${taxTone(row.kind, vooValue)}`}
+                  className={`py-2.5 text-right font-mono tabular-nums ${taxTone("signed", factorValue - mixValue)}`}
                 >
-                  {usd(vooValue)}
-                </td>
-                <td
-                  className={`py-2.5 text-right font-mono tabular-nums ${taxTone("signed", delta)}`}
-                >
-                  {usd(delta)}
+                  {usd(factorValue - mixValue)}
                 </td>
               </tr>
             );
           })}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+function OptionsMovedNote() {
+  const navigate = useNavigate({ from: "/" });
+  return (
+    <div className="rounded-lg border border-dashed border-border/70 bg-secondary/10 px-4 py-3 text-sm text-muted-foreground">
+      Options sleeve moved to{" "}
+      <button
+        type="button"
+        className="font-medium text-accent underline-offset-2 hover:underline"
+        onClick={() => void navigate({ search: { tab: "options" } })}
+      >
+        Options Book
+      </button>
+      . Book-level NAV and collateral live on{" "}
+      <button
+        type="button"
+        className="font-medium text-accent underline-offset-2 hover:underline"
+        onClick={() => void navigate({ search: { tab: "summary" } })}
+      >
+        Summary
+      </button>
+      .
     </div>
   );
 }
@@ -301,6 +414,7 @@ function PaperPortfolioPanels({
   const strategyTone =
     (paper?.strategy.returnPct ?? 0) >= 0 ? ("positive" as const) : ("negative" as const);
   const vooTone = (paper?.voo.returnPct ?? 0) >= 0 ? ("positive" as const) : ("negative" as const);
+  const mixTone = (paper?.mix.returnPct ?? 0) >= 0 ? ("positive" as const) : ("negative" as const);
   const ledgerTrades = taxLedgerTrades(paper?.recentTrades ?? []);
 
   return (
@@ -309,7 +423,11 @@ function PaperPortfolioPanels({
         <div className="mb-2 flex flex-wrap items-center gap-2.5">
           <Landmark className="size-4 text-accent" />
           <h2 className="font-display text-base font-semibold tracking-tight">
-            Paper Strategy — ${WEEKLY_CONTRIBUTION_USD.toLocaleString()} Weekly DCA
+            Paper Strategy — $
+            {WEEKLY_CONTRIBUTION_USD.toLocaleString(undefined, {
+              maximumFractionDigits: 0,
+            })}{" "}
+            Weekly DCA · $50k / 13 weeks
           </h2>
           <span className="label-caps ml-auto">
             {isPending
@@ -321,14 +439,18 @@ function PaperPortfolioPanels({
         </div>
         <p className="mb-5 max-w-3xl text-sm text-muted-foreground">
           Catch-up replay starts with the {paper?.inceptionDate ?? STRATEGY_INCEPTION_DATE} model
-          run and continues through every later weekly run. Each run allocates $
-          {WEEKLY_CONTRIBUTION_USD.toLocaleString()} at the next session open using that week&apos;s
-          target weights (3-month tax-aware holds). Dividends are reinvested in the same ETF on the
-          ex-date. The VOO sleeve invests the same cash on the same dates and reinvests the same
-          way.
+          run and continues through every later weekly run. Each run allocates ~$
+          {WEEKLY_CONTRIBUTION_USD.toLocaleString(undefined, { maximumFractionDigits: 0 })} (1/13 of
+          the $50k ETF target) at the next session open using that week&apos;s target weights.
+          Lots clear the ~3-month hold on a ladder so one vintage becomes eligible each week after
+          week 13. Tax-lot sells prefer highest cost basis / least gain first and hold short-term
+          winners for long-term treatment when possible. Undeployed ETF capital (
+          {usd(paper?.etfFloatRemaining ?? 50_000)}) parks as float until its DCA week. Dividends
+          are reinvested on the ex-date. VOO and asset-mix benchmark sleeves invest the same weekly
+          cash (mix: VOO, IJH, IJR, VEA, BND, TLT, PDBC at category weights).
         </p>
 
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid gap-4 xl:grid-cols-3">
           <div>
             <p className="label-caps mb-3">Factor strategy</p>
             <div className="grid gap-3 sm:grid-cols-3">
@@ -369,12 +491,32 @@ function PaperPortfolioPanels({
               )}
             </div>
           </div>
+          <div>
+            <p className="label-caps mb-3">Asset-mix benchmark</p>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {isPending ? (
+                Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="h-24 animate-pulse rounded-lg bg-secondary/40" />
+                ))
+              ) : (
+                <>
+                  <MetricTile
+                    label="Cumulative return"
+                    value={pct(paper?.mix.returnPct)}
+                    tone={mixTone}
+                  />
+                  <MetricTile label="Portfolio value" value={usd(paper?.mix.marketValue)} />
+                  <MetricTile label="Cost basis" value={usd(paper?.mix.costBasis)} />
+                </>
+              )}
+            </div>
+          </div>
         </div>
 
         {!isPending && paper?.weeklySeries?.length ? (
           <div className="mt-6 overflow-x-auto">
             <p className="label-caps mb-3">Cumulative return by model run</p>
-            <table className="w-full min-w-[760px] text-sm">
+            <table className="w-full min-w-[1100px] text-sm">
               <thead>
                 <tr className="border-b border-border text-left">
                   <th className="label-caps py-2.5 pr-4">Run date</th>
@@ -384,7 +526,10 @@ function PaperPortfolioPanels({
                   <th className="label-caps py-2.5 pr-4 text-right">Strategy return</th>
                   <th className="label-caps py-2.5 pr-4 text-right">VOO value</th>
                   <th className="label-caps py-2.5 pr-4 text-right">VOO return</th>
-                  <th className="label-caps py-2.5 text-right">Alpha</th>
+                  <th className="label-caps py-2.5 pr-4 text-right">vs VOO</th>
+                  <th className="label-caps py-2.5 pr-4 text-right">Mix value</th>
+                  <th className="label-caps py-2.5 pr-4 text-right">Mix return</th>
+                  <th className="label-caps py-2.5 text-right">vs Mix</th>
                 </tr>
               </thead>
               <tbody>
@@ -418,11 +563,28 @@ function PaperPortfolioPanels({
                       {pct(row.vooReturnPct)}
                     </td>
                     <td
-                      className={`py-2.5 text-right font-mono tabular-nums ${
+                      className={`py-2.5 pr-4 text-right font-mono tabular-nums ${
                         row.alphaPct >= 0 ? "text-positive" : "text-negative"
                       }`}
                     >
                       {pct(row.alphaPct)}
+                    </td>
+                    <td className="py-2.5 pr-4 text-right font-mono tabular-nums">
+                      {usd(row.mixValue)}
+                    </td>
+                    <td
+                      className={`py-2.5 pr-4 text-right font-mono tabular-nums ${
+                        row.mixReturnPct >= 0 ? "text-positive" : "text-negative"
+                      }`}
+                    >
+                      {pct(row.mixReturnPct)}
+                    </td>
+                    <td
+                      className={`py-2.5 text-right font-mono tabular-nums ${
+                        row.mixAlphaPct >= 0 ? "text-positive" : "text-negative"
+                      }`}
+                    >
+                      {pct(row.mixAlphaPct)}
                     </td>
                   </tr>
                 ))}
@@ -441,13 +603,14 @@ function PaperPortfolioPanels({
           </span>
         </div>
         <p className="mb-4 max-w-3xl text-sm text-muted-foreground">
-          Factor and VOO are separate books. Net unrealized equals that sleeve&apos;s market value
-          minus its cost basis. Distributions are taxable income and are not capital gains.
+          Factor, VOO, and the asset mix are separate books. Net unrealized equals that
+          sleeve&apos;s market value minus its cost basis. Distributions are taxable income and are
+          not capital gains. The trade list below is the factor book only.
         </p>
         {isPending ? (
           <div className="h-64 animate-pulse rounded-lg bg-secondary/40" />
         ) : (
-          <TaxComparison factor={paper?.tax.factor} voo={paper?.tax.voo} />
+          <TaxComparison factor={paper?.tax.factor} voo={paper?.tax.voo} mix={paper?.tax.mix} />
         )}
         {!isPending && ledgerTrades.length ? (
           <div className="mt-6 overflow-x-auto">
@@ -521,19 +684,24 @@ export function FactorBetaTab() {
     : [];
 
   return (
-    <div className="relative space-y-6 pb-16">
+    <div className="space-y-6">
       <section className="panel p-6">
         <div className="mb-4 flex items-center gap-2.5">
           <Brain className="size-4 text-accent" />
           <h2 className="font-display text-base font-semibold tracking-tight">
             Current Regime Read — Fama-French &amp; Carhart
           </h2>
-          <span className="label-caps ml-auto">
-            {isPending ? "Loading" : data?.live ? "Live model run" : "Placeholder run"}
+          <span className="label-caps w-full sm:ml-auto sm:w-auto">
+            {isPending ? "Loading" : data?.live ? "Live model run" : "Unavailable"}
             {current ? ` · ${current.as_of_date}` : ""}
           </span>
         </div>
-        <RegimeRead />
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-center">
+          <div className="min-w-0 flex-1">
+            <RegimeRead />
+          </div>
+          <AnnualizedAlphaTile paper={paper} isPending={paperPending} />
+        </div>
       </section>
 
       <section className="panel p-6">
@@ -641,6 +809,8 @@ export function FactorBetaTab() {
 
       <PaperPortfolioPanels paper={paper} isPending={paperPending} />
 
+      <OptionsMovedNote />
+
       <section className="panel p-6">
         <div className="mb-5 flex items-center gap-2.5">
           <History className="size-4 text-accent" />
@@ -661,10 +831,6 @@ export function FactorBetaTab() {
           <p className="text-sm text-muted-foreground">No prior model runs recorded yet.</p>
         )}
       </section>
-
-      <p className="pointer-events-none sticky bottom-4 z-10 ml-auto w-fit rounded-md border border-border/70 bg-background/85 px-3 py-2 text-right text-xs text-muted-foreground backdrop-blur">
-        Disclaimer: Not Investment Advice. For informational and educational purposes only.
-      </p>
     </div>
   );
 }
