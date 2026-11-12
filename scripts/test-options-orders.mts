@@ -7,6 +7,7 @@ import {
   buildMlegPayload,
   creditLimitPrice,
   proposeDefinedRiskTrade,
+  selectContractsForPricing,
   type OptionContractQuote,
 } from "../src/lib/options-orders";
 
@@ -171,5 +172,9 @@ const skip = proposeDefinedRiskTrade({
 assert.equal(skip.ok, false);
 if (skip.ok) throw new Error("expected skip");
 assert.equal(skip.structure, "skip_low_iv");
+
+const narrowed = selectContractsForPricing(chain, 500, 30, 45, asOf);
+assert.ok(narrowed.length > 0);
+assert.ok(narrowed.every((c) => c.expirationDate === "2026-04-17"));
 
 console.log("ok");

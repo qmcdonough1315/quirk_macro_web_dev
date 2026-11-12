@@ -15,6 +15,7 @@ export type {
   AlpacaPaperLedger,
   AlpacaAccountSnapshot,
   AlpacaPosition,
+  AlpacaOpenOrder,
   OptionsFillsFeed,
   OpenSpread,
   OptionsProposalBatch,

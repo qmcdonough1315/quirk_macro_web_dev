@@ -18,6 +18,9 @@ const SIGNAL_DESK = [
   { ticker: "QQQ", compositeScore: 0.7, ivRank: 22 },
 ] as const;
 
+/** Paper desk places 1 lot by default; sizing still shown on the proposal row. */
+const PLACE_QTY = 1;
+
 const usd = (n: number, digits = 2) =>
   n.toLocaleString("en-US", {
     style: "currency",
@@ -58,13 +61,17 @@ export function OptionsTradeDesk({
     onSuccess: (batch) => {
       setProposals(batch.proposals);
       setNotes(batch.notes);
+      const ok = batch.proposals.filter((p) => p.ok).length;
+      const skipped = batch.proposals.length - ok;
       setMessage(
         batch.live
-          ? `Proposed ${batch.proposals.filter((p) => p.ok).length} trade(s) · ${batch.asOf}`
+          ? `Proposed ${ok} trade(s), skipped ${skipped} · ${batch.asOf}`
           : (batch.notes[0] ?? "Proposal unavailable"),
       );
     },
     onError: (err) => {
+      setProposals([]);
+      setNotes([]);
       setMessage(err instanceof Error ? err.message : "Propose failed");
     },
   });
@@ -74,7 +81,7 @@ export function OptionsTradeDesk({
       placeFn({
         data: {
           confirm: true as const,
-          qty: proposal.qty,
+          qty: PLACE_QTY,
           limitPrice: proposal.limitPrice,
           structure: proposal.structure,
           ticker: proposal.ticker,
@@ -89,7 +96,7 @@ export function OptionsTradeDesk({
     onSuccess: async (result, proposal) => {
       if (result.ok) {
         setMessage(
-          `Placed ${proposal.ticker} ${proposal.structure} · order ${result.orderId ?? "?"} (${result.status ?? "submitted"})`,
+          `Placed ${proposal.ticker} ${proposal.structure} ×${PLACE_QTY} · order ${result.orderId ?? "?"} (${result.status ?? "submitted"}). Day orders fill in RTH — accepted after-hours until the open.`,
         );
         await queryClient.invalidateQueries({ queryKey: ["alpaca-paper-ledger"] });
       } else {
@@ -112,7 +119,8 @@ export function OptionsTradeDesk({
       </div>
       <p className="mb-5 max-w-3xl text-sm text-muted-foreground">
         Build defined-risk credit structures from the factor×IVR examples, price them on the live
-        option chain, then submit paper multi-leg orders (negative limit = credit).
+        option chain, then submit paper multi-leg orders (negative limit = credit). Place submits{" "}
+        {PLACE_QTY} contract by default.
       </p>
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -156,12 +164,18 @@ export function OptionsTradeDesk({
               <th className="px-3 py-2.5 font-medium text-right">Credit</th>
               <th className="px-3 py-2.5 font-medium text-right">Limit</th>
               <th className="px-3 py-2.5 font-medium text-right">Est. BP</th>
-              <th className="px-3 py-2.5 font-medium">Legs</th>
+              <th className="px-3 py-2.5 font-medium">Legs / reason</th>
               <th className="px-3 py-2.5 font-medium text-right">Place</th>
             </tr>
           </thead>
           <tbody>
-            {proposals.length === 0 ? (
+            {propose.isPending ? (
+              <tr>
+                <td colSpan={9} className="px-3 py-4 text-sm text-muted-foreground">
+                  Pricing chains…
+                </td>
+              </tr>
+            ) : proposals.length === 0 ? (
               <tr>
                 <td colSpan={9} className="px-3 py-4 text-sm text-muted-foreground">
                   No proposals yet — run Propose from signals.
@@ -174,23 +188,34 @@ export function OptionsTradeDesk({
                     <tr key={`${row.ticker}-skip`} className="border-b border-border/40 last:border-0">
                       <td className="px-3 py-2.5 font-mono font-semibold">{row.ticker}</td>
                       <td className="px-3 py-2.5 font-mono text-xs">{row.structure}</td>
-                      <td className="px-3 py-2.5 text-xs text-muted-foreground" colSpan={6}>
-                        {row.reason}
+                      <td className="px-3 py-2.5 text-xs text-muted-foreground" colSpan={5}>
+                        Skip
                       </td>
+                      <td className="px-3 py-2.5 text-xs text-muted-foreground">{row.reason}</td>
                       <td />
                     </tr>
                   );
                 }
                 const placing =
-                  place.isPending && place.variables?.ticker === row.ticker && place.variables?.structure === row.structure;
+                  place.isPending &&
+                  place.variables?.ticker === row.ticker &&
+                  place.variables?.structure === row.structure;
                 return (
-                  <tr key={`${row.ticker}-${row.structure}-${row.expirationDate}`} className="border-b border-border/40 last:border-0">
+                  <tr
+                    key={`${row.ticker}-${row.structure}-${row.expirationDate}`}
+                    className="border-b border-border/40 last:border-0"
+                  >
                     <td className="px-3 py-2.5 font-mono font-semibold">{row.ticker}</td>
                     <td className="px-3 py-2.5 font-mono text-xs">{row.structure}</td>
                     <td className="px-3 py-2.5 font-mono text-xs">
                       {row.expirationDate} · {row.dte}d
                     </td>
-                    <td className="px-3 py-2.5 text-right font-mono tabular-nums">{row.qty}</td>
+                    <td className="px-3 py-2.5 text-right font-mono tabular-nums">
+                      {PLACE_QTY}
+                      <span className="ml-1 text-[10px] text-muted-foreground">
+                        /{row.qty}
+                      </span>
+                    </td>
                     <td className="px-3 py-2.5 text-right font-mono tabular-nums">
                       {usd(row.creditPerShare)}
                     </td>
@@ -198,7 +223,7 @@ export function OptionsTradeDesk({
                       {row.limitPrice.toFixed(2)}
                     </td>
                     <td className="px-3 py-2.5 text-right font-mono tabular-nums">
-                      {usd(row.estimatedBp, 0)}
+                      {usd(row.maxLossPerContract * PLACE_QTY, 0)}
                     </td>
                     <td className="px-3 py-2.5 font-mono text-[11px] text-muted-foreground">
                       {row.legs

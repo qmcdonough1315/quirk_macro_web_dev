@@ -17,6 +17,7 @@ import {
 } from "./options-fills";
 import {
   proposeDefinedRiskTrade,
+  selectContractsForPricing,
   type MlegOrderPayload,
   type OptionContractQuote,
   type TradeProposalResult,
@@ -76,6 +77,18 @@ export interface AlpacaPosition {
   changeToday: number;
 }
 
+export interface AlpacaOpenOrder {
+  id: string;
+  status: string;
+  orderClass: string;
+  qty: number;
+  filledQty: number;
+  limitPrice: number | null;
+  submittedAt: string;
+  symbol: string;
+  legs: Array<{ symbol: string; side: string; qty: number }>;
+}
+
 export interface AlpacaPaperLedger {
   live: boolean;
   asOf: string;
@@ -84,6 +97,7 @@ export interface AlpacaPaperLedger {
   positions: AlpacaPosition[];
   equityPositions: AlpacaPosition[];
   optionPositions: AlpacaPosition[];
+  openOrders: AlpacaOpenOrder[];
   optionsFeed: OptionsFillsFeed | null;
   notes: string[];
 }
@@ -245,9 +259,49 @@ export function emptyAlpacaLedger(notes: string[]): AlpacaPaperLedger {
     positions: [],
     equityPositions: [],
     optionPositions: [],
+    openOrders: [],
     optionsFeed: null,
     notes,
   };
+}
+
+function mapOpenOrder(raw: Record<string, unknown>): AlpacaOpenOrder {
+  const legsRaw = raw["legs"];
+  const legs = Array.isArray(legsRaw)
+    ? (legsRaw as Record<string, unknown>[]).map((leg) => ({
+        symbol: str(leg["symbol"]).toUpperCase(),
+        side: str(leg["side"]),
+        qty: num(leg["qty"] ?? leg["ratio_qty"] ?? 1),
+      }))
+    : [];
+  const limitRaw = raw["limit_price"];
+  const limitPrice =
+    limitRaw == null || limitRaw === ""
+      ? null
+      : Number.isFinite(Number(limitRaw))
+        ? Number(limitRaw)
+        : null;
+  return {
+    id: str(raw["id"]),
+    status: str(raw["status"]),
+    orderClass: str(raw["order_class"] || "simple"),
+    qty: num(raw["qty"]),
+    filledQty: num(raw["filled_qty"]),
+    limitPrice,
+    submittedAt: str(raw["submitted_at"]),
+    symbol: str(raw["symbol"]).toUpperCase() || legs.map((l) => l.symbol).join("+"),
+    legs,
+  };
+}
+
+async function fetchOpenOrders(): Promise<{
+  orders: AlpacaOpenOrder[];
+  note: string | null;
+}> {
+  const res = await alpacaGet<Record<string, unknown>[]>("/orders?status=open&nested=true&limit=50");
+  if (!res.ok) return { orders: [], note: res.error };
+  if (!Array.isArray(res.data)) return { orders: [], note: "Alpaca open orders was not a list." };
+  return { orders: res.data.map(mapOpenOrder), note: null };
 }
 
 async function fetchOptionFills(): Promise<{
@@ -351,6 +405,8 @@ export async function fetchAlpacaPaperLedger(): Promise<AlpacaPaperLedger> {
   if (fillHistory.note) feedNotes.push(fillHistory.note);
   const greeks = await fetchOptionDeltas(optionPositions.map((position) => position.symbol));
   if (greeks.note) feedNotes.push(`Option greeks unavailable (${greeks.note}).`);
+  const openOrdersRes = await fetchOpenOrders();
+  if (openOrdersRes.note) notes.push(openOrdersRes.note);
 
   const optionsFeed = buildOptionsFeed({
     positions: optionPositions.map((position) => ({
@@ -370,7 +426,7 @@ export async function fetchAlpacaPaperLedger(): Promise<AlpacaPaperLedger> {
     `Paper account ${account.status} · options level ${account.optionsTradingLevel ?? "n/a"} (approved ${account.optionsApprovedLevel ?? "n/a"})`,
   );
   notes.push(
-    `${optionsFeed.spreads.length} open spread${optionsFeed.spreads.length === 1 ? "" : "s"} · ${optionPositions.length} option legs`,
+    `${optionsFeed.spreads.length} open spread${optionsFeed.spreads.length === 1 ? "" : "s"} · ${optionPositions.length} option legs · ${openOrdersRes.orders.length} open order${openOrdersRes.orders.length === 1 ? "" : "s"}`,
   );
 
   return {
@@ -381,6 +437,7 @@ export async function fetchAlpacaPaperLedger(): Promise<AlpacaPaperLedger> {
     positions,
     equityPositions,
     optionPositions,
+    openOrders: openOrdersRes.orders,
     optionsFeed,
     notes,
   };
@@ -470,10 +527,17 @@ async function fetchOptionSnapshots(
 
 export async function fetchOptionContractsForUnderlying(
   underlying: string,
-  opts?: { dteMin?: number; dteMax?: number },
+  opts?: {
+    dteMin?: number;
+    dteMax?: number;
+    /** When set, only near-spot contracts are quote-enriched (fast path for propose). */
+    spot?: number;
+    enrichQuotes?: boolean;
+  },
 ): Promise<{ ok: true; contracts: OptionContractQuote[]; note: string | null } | { ok: false; error: string }> {
   const dteMin = opts?.dteMin ?? OPTIONS_DTE_MIN;
   const dteMax = opts?.dteMax ?? OPTIONS_DTE_MAX;
+  const enrichQuotes = opts?.enrichQuotes !== false;
   const query = new URLSearchParams({
     underlying_symbols: underlying.toUpperCase(),
     status: "active",
@@ -485,10 +549,23 @@ export async function fetchOptionContractsForUnderlying(
   if (!res.ok) return { ok: false, error: res.error };
   const rawList = res.data["option_contracts"];
   const rows = Array.isArray(rawList) ? (rawList as Record<string, unknown>[]) : [];
-  const contracts = rows.map(mapContract).filter((c): c is OptionContractQuote => c != null);
+  let contracts = rows.map(mapContract).filter((c): c is OptionContractQuote => c != null);
   if (!contracts.length) {
     return { ok: true, contracts: [], note: `No active contracts for ${underlying.toUpperCase()}.` };
   }
+
+  if (opts?.spot != null && opts.spot > 0) {
+    contracts = selectContractsForPricing(contracts, opts.spot, dteMin, dteMax);
+    if (!contracts.length) {
+      return {
+        ok: true,
+        contracts: [],
+        note: `No near-spot contracts for ${underlying.toUpperCase()} in DTE window.`,
+      };
+    }
+  }
+
+  if (!enrichQuotes) return { ok: true, contracts, note: null };
 
   const snaps = await fetchOptionSnapshots(contracts.map((c) => c.symbol));
   for (const c of contracts) {
@@ -559,69 +636,74 @@ export async function proposeOptionsPaperTrades(
   const paperOnly = isPaperTradingBase(baseUrl);
   if (!paperOnly) notes.push("Base URL is not paper-api — proposals only; placement blocked.");
 
-  const proposals: TradeProposalResult[] = [];
   const budget = Math.min(maxNameMarginUsd(), OPTIONS_PAPER_CAPITAL_USD);
 
-  for (const signal of signals) {
-    const ticker = signal.ticker.toUpperCase();
-    const priceRes = await fetchUnderlyingLastPrice(ticker);
-    if (!priceRes.ok) {
-      proposals.push({
-        ok: false,
-        ticker,
-        structure: "skip_low_iv",
-        signal: {
+  const skip = (
+    ticker: string,
+    compositeScore: number,
+    ivRank: number,
+    reason: string,
+  ): TradeProposalResult => ({
+    ok: false,
+    ticker,
+    structure: "skip_low_iv",
+    signal: {
+      ticker,
+      compositeScore,
+      ivRank,
+      regime: "q4_low_iv",
+      structure: "skip_low_iv",
+      dteMin: OPTIONS_DTE_MIN,
+      dteMax: OPTIONS_DTE_MAX,
+      shortDelta: 0,
+      wingDelta: null,
+      rationale: reason,
+    },
+    reason,
+  });
+
+  const built = await Promise.all(
+    signals.map(async (signal) => {
+      const ticker = signal.ticker.toUpperCase();
+      const priceRes = await fetchUnderlyingLastPrice(ticker);
+      if (!priceRes.ok) {
+        return {
+          proposal: skip(ticker, signal.compositeScore, signal.ivRank, priceRes.error),
+          note: null as string | null,
+        };
+      }
+
+      const chainRes = await fetchOptionContractsForUnderlying(ticker, {
+        spot: priceRes.price,
+      });
+      if (!chainRes.ok) {
+        return {
+          proposal: skip(ticker, signal.compositeScore, signal.ivRank, chainRes.error),
+          note: null as string | null,
+        };
+      }
+
+      return {
+        proposal: proposeDefinedRiskTrade({
           ticker,
           compositeScore: signal.compositeScore,
           ivRank: signal.ivRank,
-          regime: "q4_low_iv",
-          structure: "skip_low_iv",
-          dteMin: OPTIONS_DTE_MIN,
-          dteMax: OPTIONS_DTE_MAX,
-          shortDelta: 0,
-          wingDelta: null,
-          rationale: priceRes.error,
-        },
-        reason: priceRes.error,
-      });
-      continue;
-    }
+          underlyingPrice: priceRes.price,
+          contracts: chainRes.contracts,
+          capitalBudgetUsd: budget,
+        }),
+        note: chainRes.note ? `${ticker}: ${chainRes.note}` : null,
+      };
+    }),
+  );
 
-    const chainRes = await fetchOptionContractsForUnderlying(ticker);
-    if (!chainRes.ok) {
-      proposals.push({
-        ok: false,
-        ticker,
-        structure: "skip_low_iv",
-        signal: {
-          ticker,
-          compositeScore: signal.compositeScore,
-          ivRank: signal.ivRank,
-          regime: "q4_low_iv",
-          structure: "skip_low_iv",
-          dteMin: OPTIONS_DTE_MIN,
-          dteMax: OPTIONS_DTE_MAX,
-          shortDelta: 0,
-          wingDelta: null,
-          rationale: chainRes.error,
-        },
-        reason: chainRes.error,
-      });
-      continue;
-    }
-    if (chainRes.note) notes.push(`${ticker}: ${chainRes.note}`);
-
-    proposals.push(
-      proposeDefinedRiskTrade({
-        ticker,
-        compositeScore: signal.compositeScore,
-        ivRank: signal.ivRank,
-        underlyingPrice: priceRes.price,
-        contracts: chainRes.contracts,
-        capitalBudgetUsd: budget,
-      }),
-    );
+  const proposals = built.map((row) => row.proposal);
+  for (const row of built) {
+    if (row.note) notes.push(row.note);
   }
+  const okCount = proposals.filter((p) => p.ok).length;
+  const skipCount = proposals.length - okCount;
+  notes.unshift(`Built ${okCount} proposal(s), skipped ${skipCount}.`);
 
   return {
     live: true,

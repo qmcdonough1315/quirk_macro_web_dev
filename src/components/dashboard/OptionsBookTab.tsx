@@ -241,8 +241,45 @@ export function OptionsBookTab() {
           </div>
         ) : null}
 
+        {live && (ledger.data?.openOrders?.length ?? 0) > 0 ? (
+          <div className="mt-5 overflow-x-auto rounded-lg border border-border/70">
+            <table className="w-full min-w-[720px] text-left text-sm">
+              <thead className="border-b border-border/70 bg-secondary/30 text-xs uppercase tracking-wider text-muted-foreground">
+                <tr>
+                  <th className="px-3 py-2.5 font-medium">Open order</th>
+                  <th className="px-3 py-2.5 font-medium">Status</th>
+                  <th className="px-3 py-2.5 font-medium text-right">Qty</th>
+                  <th className="px-3 py-2.5 font-medium text-right">Limit</th>
+                  <th className="px-3 py-2.5 font-medium">Legs</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(ledger.data?.openOrders ?? []).map((order) => (
+                  <tr key={order.id} className="border-b border-border/40 last:border-0">
+                    <td className="px-3 py-2.5 font-mono text-xs">{order.id.slice(0, 8)}…</td>
+                    <td className="px-3 py-2.5 font-mono text-xs">{order.status}</td>
+                    <td className="px-3 py-2.5 text-right font-mono tabular-nums">{order.qty}</td>
+                    <td className="px-3 py-2.5 text-right font-mono tabular-nums">
+                      {order.limitPrice == null ? "—" : order.limitPrice.toFixed(2)}
+                    </td>
+                    <td className="px-3 py-2.5 font-mono text-[11px] text-muted-foreground">
+                      {order.legs.length
+                        ? order.legs.map((l) => `${l.side} ${l.symbol}`).join(" · ")
+                        : order.symbol}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
+
         {live && feed?.notes.length ? (
           <p className="mt-4 text-xs text-muted-foreground">{feed.notes.join(" · ")}</p>
+        ) : null}
+
+        {live && ledger.data?.notes?.length ? (
+          <p className="mt-2 text-xs text-muted-foreground">{ledger.data.notes.join(" · ")}</p>
         ) : null}
 
         {!live && !ledger.isPending ? (

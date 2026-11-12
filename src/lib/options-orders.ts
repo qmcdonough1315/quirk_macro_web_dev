@@ -105,6 +105,38 @@ function todayUtc(asOf?: Date): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
 }
 
+/**
+ * Keep only the expiry in the DTE window and a bounded OTM put/call ladder.
+ * Used before quote/greeks enrichment so we do not snapshot an entire ETF chain.
+ */
+export function selectContractsForPricing(
+  contracts: OptionContractQuote[],
+  spot: number,
+  dteMin: number,
+  dteMax: number,
+  asOf?: Date,
+): OptionContractQuote[] {
+  if (!(spot > 0) || !contracts.length) return [];
+  const expiry = pickExpiration(contracts, dteMin, dteMax, asOf ?? new Date());
+  if (!expiry) return [];
+  const dated = contracts.filter((c) => c.expirationDate === expiry.expirationDate && c.tradable);
+  const width = preferredWidth(dated[0]?.underlying ?? "", spot);
+  // Cover ~25Δ / 18Δ shorts plus defined-risk wings without pulling the whole chain.
+  const band = Math.max(width * 12, spot * 0.18);
+
+  const otmPuts = dated
+    .filter((c) => c.type === "put" && c.strikePrice < spot && spot - c.strikePrice <= band)
+    .sort((a, b) => b.strikePrice - a.strikePrice)
+    .slice(0, 40);
+  const otmCalls = dated
+    .filter((c) => c.type === "call" && c.strikePrice > spot && c.strikePrice - spot <= band)
+    .sort((a, b) => a.strikePrice - b.strikePrice)
+    .slice(0, 40);
+
+  const selected = [...otmPuts, ...otmCalls];
+  return selected.length ? selected : dated.slice(0, 80);
+}
+
 function midOf(c: OptionContractQuote): number | null {
   if (c.mid != null && Number.isFinite(c.mid) && c.mid > 0) return c.mid;
   if (c.bid != null && c.ask != null && c.bid > 0 && c.ask > 0) return (c.bid + c.ask) / 2;
