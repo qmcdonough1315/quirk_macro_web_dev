@@ -25,6 +25,7 @@ import {
   annualizedAlphaPct,
   taxLedgerTrades,
 } from "@/lib/paper-portfolio-rules";
+import { EtfDcaDesk } from "@/components/dashboard/EtfDcaDesk";
 import { RegimeRead } from "@/components/dashboard/RegimeRead";
 import { useNavigate } from "@tanstack/react-router";
 
@@ -808,6 +809,11 @@ export function FactorBetaTab() {
       </section>
 
       <PaperPortfolioPanels paper={paper} isPending={paperPending} />
+
+      <EtfDcaDesk
+        holdings={current?.portfolio ?? []}
+        runDate={current?.as_of_date ?? null}
+      />
 
       <OptionsMovedNote />
 

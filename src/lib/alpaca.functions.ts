@@ -4,10 +4,14 @@ import { z } from "zod";
 import {
   emptyAlpacaLedger,
   fetchAlpacaPaperLedger,
+  placeEtfDcaBuy,
   placeOptionsPaperOrder,
+  proposeEtfDcaBuys,
   proposeOptionsPaperTrades,
   type AlpacaPaperLedger,
+  type EtfDcaProposalBatch,
   type OptionsProposalBatch,
+  type PlaceEtfBuyResult,
   type PlaceOptionsOrderResult,
 } from "./alpaca.server";
 
@@ -22,6 +26,11 @@ export type {
   PlaceOptionsOrderResult,
   TradeProposal,
   TradeProposalResult,
+  EtfDcaProposalBatch,
+  PlaceEtfBuyResult,
+  WeeklyEtfBuyProposal,
+  EtfBuyProposalRow,
+  PaperLotFromFill,
 } from "./alpaca.server";
 
 export const getAlpacaPaperLedger = createServerFn({ method: "GET" }).handler(
@@ -107,6 +116,72 @@ export const placeAlpacaOptionsOrder = createServerFn({ method: "POST" })
         orderId: null,
         status: null,
         payload: null,
+        error: message,
+      };
+    }
+  });
+
+const etfProposeSchema = z.object({
+  weights: z.record(z.string().min(1).max(8), z.number()),
+  weeklyContribution: z.number().positive().max(50_000).optional(),
+  includeVoo: z.boolean().optional(),
+});
+
+export const proposeAlpacaEtfDca = createServerFn({ method: "POST" })
+  .validator((input: unknown) => etfProposeSchema.parse(input))
+  .handler(async ({ data }): Promise<EtfDcaProposalBatch> => {
+    try {
+      return await proposeEtfDcaBuys({
+        weights: data.weights,
+        ...(data.weeklyContribution != null
+          ? { weeklyContribution: data.weeklyContribution }
+          : {}),
+        ...(data.includeVoo != null ? { includeVoo: data.includeVoo } : {}),
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "ETF DCA proposal failed";
+      return {
+        live: false,
+        asOf: new Date().toISOString(),
+        paperOnly: true,
+        proposal: null,
+        notes: [message],
+      };
+    }
+  });
+
+const etfPlaceSchema = z.object({
+  confirm: z.literal(true),
+  symbol: z.string().min(1).max(8),
+  notional: z.number().min(1).max(50_000),
+  reason: z.enum(["weekly_dca", "weekly_voo_dca"]).optional(),
+  strategy: z.enum(["factor", "voo"]).optional(),
+  runDate: z.string().min(8).max(32).optional(),
+});
+
+export const placeAlpacaEtfBuy = createServerFn({ method: "POST" })
+  .validator((input: unknown) => etfPlaceSchema.parse(input))
+  .handler(async ({ data }): Promise<PlaceEtfBuyResult> => {
+    try {
+      return await placeEtfDcaBuy({
+        confirm: data.confirm,
+        symbol: data.symbol,
+        notional: data.notional,
+        ...(data.reason != null ? { reason: data.reason } : {}),
+        ...(data.strategy != null ? { strategy: data.strategy } : {}),
+        ...(data.runDate != null ? { runDate: data.runDate } : {}),
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "ETF buy failed";
+      return {
+        ok: false,
+        dryRun: true,
+        orderId: null,
+        status: null,
+        payload: null,
+        filledQty: null,
+        filledAvgPrice: null,
+        lot: null,
         error: message,
       };
     }

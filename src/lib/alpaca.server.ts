@@ -16,6 +16,13 @@ import {
   type OptionsFillsFeed,
 } from "./options-fills";
 import {
+  lotFromAlpacaFill,
+  proposeWeeklyEtfBuys,
+  type EquityBuyPayload,
+  type PaperLotFromFill,
+  type WeeklyEtfBuyProposal,
+} from "./etf-orders";
+import {
   proposeDefinedRiskTrade,
   selectContractsForPricing,
   type MlegOrderPayload,
@@ -29,6 +36,7 @@ import {
   maxNameMarginUsd,
   type OptionsStructure,
 } from "./options-sleeve-rules";
+import { WEEKLY_CONTRIBUTION_USD } from "./paper-portfolio-rules";
 
 export type { OptionsFillsFeed, OpenSpread } from "./options-fills";
 export type {
@@ -37,6 +45,12 @@ export type {
   TradeProposal,
   TradeProposalResult,
 } from "./options-orders";
+export type {
+  EquityBuyPayload,
+  EtfBuyProposalRow,
+  PaperLotFromFill,
+  WeeklyEtfBuyProposal,
+} from "./etf-orders";
 
 export const DEFAULT_ALPACA_PAPER_BASE = "https://paper-api.alpaca.markets";
 const DEFAULT_ALPACA_DATA_BASE = "https://data.alpaca.markets";
@@ -799,6 +813,154 @@ export async function placeOptionsPaperOrder(
     orderId: str(res.data["id"]) || null,
     status: str(res.data["status"]) || null,
     payload,
+    error: null,
+  };
+}
+
+export interface EtfDcaProposalBatch {
+  live: boolean;
+  asOf: string;
+  paperOnly: boolean;
+  proposal: WeeklyEtfBuyProposal | null;
+  notes: string[];
+}
+
+export async function proposeEtfDcaBuys(input: {
+  weights: Record<string, number>;
+  weeklyContribution?: number;
+  includeVoo?: boolean;
+}): Promise<EtfDcaProposalBatch> {
+  const notes: string[] = [];
+  const { keyId, secret, baseUrl } = credentials();
+  const paperOnly = isPaperTradingBase(baseUrl);
+  if (!keyId || !secret) {
+    return {
+      live: false,
+      asOf: new Date().toISOString(),
+      paperOnly,
+      proposal: null,
+      notes: [
+        "Alpaca credentials missing. Set ALPACA_API_KEY_ID and ALPACA_API_SECRET_KEY in Vercel (Production) and redeploy, or in Cursor secrets.",
+      ],
+    };
+  }
+  if (!paperOnly) notes.push("Base URL is not paper-api — proposals only; placement blocked.");
+
+  const weekly = input.weeklyContribution ?? WEEKLY_CONTRIBUTION_USD;
+  const proposal = proposeWeeklyEtfBuys(input.weights, {
+    weeklyContribution: weekly,
+    includeVoo: Boolean(input.includeVoo),
+  });
+  notes.unshift(
+    `Built ${proposal.buys.length} factor buy(s)` +
+      (proposal.vooBuy ? " + VOO sleeve" : "") +
+      ` · deployed $${proposal.deployedNotional.toFixed(2)} of $${weekly.toFixed(2)}.`,
+  );
+  return {
+    live: true,
+    asOf: new Date().toISOString(),
+    paperOnly,
+    proposal,
+    notes,
+  };
+}
+
+export interface PlaceEtfBuyRequest {
+  confirm: boolean;
+  symbol: string;
+  notional: number;
+  reason?: "weekly_dca" | "weekly_voo_dca";
+  strategy?: "factor" | "voo";
+  runDate?: string;
+}
+
+export interface PlaceEtfBuyResult {
+  ok: boolean;
+  dryRun: boolean;
+  orderId: string | null;
+  status: string | null;
+  payload: EquityBuyPayload | null;
+  filledQty: number | null;
+  filledAvgPrice: number | null;
+  lot: PaperLotFromFill | null;
+  error: string | null;
+}
+
+export async function placeEtfDcaBuy(req: PlaceEtfBuyRequest): Promise<PlaceEtfBuyResult> {
+  const empty = (error: string, dryRun = true): PlaceEtfBuyResult => ({
+    ok: false,
+    dryRun,
+    orderId: null,
+    status: null,
+    payload: null,
+    filledQty: null,
+    filledAvgPrice: null,
+    lot: null,
+    error,
+  });
+
+  if (!req.confirm) {
+    return empty("Set confirm=true to submit a paper equity buy.");
+  }
+  if (!isPaperTradingBase()) {
+    return empty("Refusing order: ALPACA_API_BASE_URL is not paper-api.alpaca.markets.");
+  }
+  if (!(req.notional >= 1) || !Number.isFinite(req.notional)) {
+    return empty("notional must be >= 1.00");
+  }
+  const symbol = req.symbol.trim().toUpperCase();
+  if (!symbol) return empty("symbol required");
+
+  const payload: EquityBuyPayload = {
+    symbol,
+    notional: req.notional.toFixed(2),
+    side: "buy",
+    type: "market",
+    time_in_force: "day",
+  };
+
+  const res = await alpacaPost<Record<string, unknown>>("/orders", payload);
+  if (!res.ok) {
+    return {
+      ok: false,
+      dryRun: false,
+      orderId: null,
+      status: null,
+      payload,
+      filledQty: null,
+      filledAvgPrice: null,
+      lot: null,
+      error: res.error,
+    };
+  }
+
+  const orderId = str(res.data["id"]) || null;
+  const status = str(res.data["status"]) || null;
+  const filledQty = num(res.data["filled_qty"]);
+  const filledAvgPrice = num(res.data["filled_avg_price"]);
+  let lot: PaperLotFromFill | null = null;
+  if (filledQty > 0 && filledAvgPrice > 0) {
+    lot = lotFromAlpacaFill({
+      ticker: symbol,
+      shares: filledQty,
+      price: filledAvgPrice,
+      filledAt: str(res.data["filled_at"]) || null,
+      orderId,
+      strategy: req.strategy ?? (req.reason === "weekly_voo_dca" ? "voo" : "factor"),
+      reason: req.reason ?? "weekly_dca",
+      runDate: req.runDate ?? null,
+    });
+  }
+
+  return {
+    ok: true,
+    dryRun: false,
+    orderId,
+    status,
+    payload,
+    filledQty: filledQty > 0 ? filledQty : null,
+    filledAvgPrice: filledAvgPrice > 0 ? filledAvgPrice : null,
+    lot,
     error: null,
   };
 }
