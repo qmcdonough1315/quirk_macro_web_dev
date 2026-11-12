@@ -9,6 +9,7 @@ import {
   type TradeProposal,
   type TradeProposalResult,
 } from "@/lib/alpaca.functions";
+import type { AlpacaConnStatus } from "@/lib/alpaca-status";
 
 const SIGNAL_DESK = [
   { ticker: "SPY", compositeScore: 0.9, ivRank: 55 },
@@ -29,7 +30,13 @@ function isProposal(p: TradeProposalResult): p is TradeProposal {
   return p.ok;
 }
 
-export function OptionsTradeDesk({ live }: { live: boolean }) {
+export function OptionsTradeDesk({
+  live,
+  connection,
+}: {
+  live: boolean;
+  connection: AlpacaConnStatus;
+}) {
   const queryClient = useQueryClient();
   const proposeFn = useServerFn(proposeAlpacaOptionsTrades);
   const placeFn = useServerFn(placeAlpacaOptionsOrder);
@@ -123,7 +130,13 @@ export function OptionsTradeDesk({ live }: { live: boolean }) {
           Propose from signals
         </button>
         {!live ? (
-          <p className="text-xs text-muted-foreground">Connect Alpaca paper credentials first.</p>
+          <p className="text-xs text-muted-foreground">
+            {connection === "unauthorized"
+              ? "Alpaca rejected the API keys (401). Rotate paper keys in Alpaca, update Vercel + Cursor secrets, redeploy."
+              : connection === "error"
+                ? "Alpaca ledger error — see notes above."
+                : "Connect Alpaca paper credentials first (Vercel Production env + redeploy)."}
+          </p>
         ) : null}
       </div>
 

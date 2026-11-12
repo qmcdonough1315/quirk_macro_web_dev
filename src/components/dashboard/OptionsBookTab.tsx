@@ -4,6 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { OptionsSleevePanel } from "@/components/dashboard/OptionsSleevePanel";
 import { OptionsTradeDesk } from "@/components/dashboard/OptionsTradeDesk";
 import { getAlpacaPaperLedger } from "@/lib/alpaca.functions";
+import { alpacaStatusLabel, classifyAlpacaConnection } from "@/lib/alpaca-status";
 import {
   CASH_MARGIN_RESERVE_USD,
   OPTIONS_PAPER_CAPITAL_USD,
@@ -32,6 +33,10 @@ export function OptionsBookTab() {
   const account = ledger.data?.account;
   const optionPositions = ledger.data?.optionPositions ?? [];
   const live = Boolean(ledger.data?.live);
+  const conn = classifyAlpacaConnection({
+    live,
+    ...(ledger.data?.notes != null ? { notes: ledger.data.notes } : {}),
+  });
   const feed = live ? (ledger.data?.optionsFeed ?? null) : null;
   const partitions = cashPartitions({
     etfFloatRemaining: 0,
@@ -47,19 +52,18 @@ export function OptionsBookTab() {
     if (!live || value == null || !Number.isFinite(value)) return "Not live";
     return `${value > 0 ? "+" : ""}${value.toFixed(1)}`;
   };
+  const statusText = ledger.isPending
+    ? "Loading Alpaca"
+    : live
+      ? `${alpacaStatusLabel(conn)} · level ${account?.optionsTradingLevel ?? "—"}`
+      : alpacaStatusLabel(conn);
 
   return (
     <div className="space-y-6">
       <section className="panel p-6">
         <div className="mb-4 flex flex-wrap items-center gap-2.5">
           <h2 className="font-display text-base font-semibold tracking-tight">Options Book</h2>
-          <span className="label-caps ml-auto">
-            {ledger.isPending
-              ? "Loading Alpaca"
-              : live
-                ? `Alpaca paper · live · level ${account?.optionsTradingLevel ?? "—"}`
-                : "Alpaca paper · awaiting credentials"}
-          </span>
+          <span className="label-caps ml-auto">{statusText}</span>
         </div>
         <p className="mb-5 max-w-3xl text-sm text-muted-foreground">
           Open spreads, marks, and P&amp;L come from Alpaca paper fills and positions. Buying power
@@ -248,7 +252,7 @@ export function OptionsBookTab() {
         ) : null}
       </section>
 
-      <OptionsTradeDesk live={live} />
+      <OptionsTradeDesk live={live} connection={conn} />
       <OptionsSleevePanel />
     </div>
   );
