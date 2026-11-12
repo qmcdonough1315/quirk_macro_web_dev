@@ -15,8 +15,27 @@ import {
   type OptionFillInput,
   type OptionsFillsFeed,
 } from "./options-fills";
+import {
+  proposeDefinedRiskTrade,
+  type MlegOrderPayload,
+  type OptionContractQuote,
+  type TradeProposalResult,
+} from "./options-orders";
+import {
+  OPTIONS_DTE_MAX,
+  OPTIONS_DTE_MIN,
+  OPTIONS_PAPER_CAPITAL_USD,
+  maxNameMarginUsd,
+  type OptionsStructure,
+} from "./options-sleeve-rules";
 
 export type { OptionsFillsFeed, OpenSpread } from "./options-fills";
+export type {
+  MlegOrderPayload,
+  OptionContractQuote,
+  TradeProposal,
+  TradeProposalResult,
+} from "./options-orders";
 
 export const DEFAULT_ALPACA_PAPER_BASE = "https://paper-api.alpaca.markets";
 const DEFAULT_ALPACA_DATA_BASE = "https://data.alpaca.markets";
@@ -99,6 +118,7 @@ function credentials() {
 
 async function alpacaFetch<T>(
   url: string,
+  init?: { method?: string; body?: string },
 ): Promise<{ ok: true; data: T } | { ok: false; error: string }> {
   const { keyId, secret } = credentials();
   if (!keyId || !secret) {
@@ -110,18 +130,32 @@ async function alpacaFetch<T>(
   }
 
   try {
-    const res = await fetch(url, {
-      headers: {
-        "APCA-API-KEY-ID": keyId,
-        "APCA-API-SECRET-KEY": secret,
-        Accept: "application/json",
-      },
-      cache: "no-store",
-    });
+    const headers: Record<string, string> = {
+      "APCA-API-KEY-ID": keyId,
+      "APCA-API-SECRET-KEY": secret,
+      Accept: "application/json",
+    };
+    if (init?.body) headers["Content-Type"] = "application/json";
+    const res = await fetch(
+      url,
+      init?.body
+        ? {
+            method: init.method ?? "POST",
+            headers,
+            body: init.body,
+            cache: "no-store",
+          }
+        : {
+            method: init?.method ?? "GET",
+            headers,
+            cache: "no-store",
+          },
+    );
     if (!res.ok) {
       const body = await res.text().catch(() => "");
       return { ok: false, error: `Alpaca ${res.status}: ${body.slice(0, 240) || res.statusText}` };
     }
+    if (res.status === 204) return { ok: true, data: {} as T };
     return { ok: true, data: (await res.json()) as T };
   } catch (err) {
     return {
@@ -137,6 +171,19 @@ async function alpacaGet<T>(
   const { baseUrl } = credentials();
   const url = `${baseUrl}/v2${path.startsWith("/") ? path : `/${path}`}`;
   return alpacaFetch<T>(url);
+}
+
+async function alpacaPost<T>(
+  path: string,
+  body: unknown,
+): Promise<{ ok: true; data: T } | { ok: false; error: string }> {
+  const { baseUrl } = credentials();
+  const url = `${baseUrl}/v2${path.startsWith("/") ? path : `/${path}`}`;
+  return alpacaFetch<T>(url, { method: "POST", body: JSON.stringify(body) });
+}
+
+export function isPaperTradingBase(baseUrl = credentials().baseUrl): boolean {
+  return /paper-api\.alpaca\.markets/i.test(baseUrl);
 }
 
 function mapAccount(raw: Record<string, unknown>): AlpacaAccountSnapshot {
@@ -336,5 +383,340 @@ export async function fetchAlpacaPaperLedger(): Promise<AlpacaPaperLedger> {
     optionPositions,
     optionsFeed,
     notes,
+  };
+}
+
+function ymdPlusDays(days: number, asOf = new Date()): string {
+  const d = new Date(Date.UTC(asOf.getUTCFullYear(), asOf.getUTCMonth(), asOf.getUTCDate()));
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function mapContract(raw: Record<string, unknown>): OptionContractQuote | null {
+  const symbol = str(raw["symbol"]).toUpperCase();
+  const underlying = str(raw["underlying_symbol"] || raw["root_symbol"]).toUpperCase();
+  const expirationDate = str(raw["expiration_date"]);
+  const typeRaw = str(raw["type"]).toLowerCase();
+  const type = typeRaw === "call" || typeRaw === "put" ? typeRaw : null;
+  const strikePrice = num(raw["strike_price"]);
+  if (!symbol || !underlying || !expirationDate || !type || !(strikePrice > 0)) return null;
+  return {
+    symbol,
+    underlying,
+    expirationDate,
+    strikePrice,
+    type,
+    mid: null,
+    bid: null,
+    ask: null,
+    delta: null,
+    tradable: raw["tradable"] == null ? true : Boolean(raw["tradable"]),
+  };
+}
+
+function readQuoteSide(snap: unknown, key: "bid" | "ask"): number | null {
+  if (!snap || typeof snap !== "object") return null;
+  const quote = (snap as Record<string, unknown>)["latestQuote"];
+  if (!quote || typeof quote !== "object") return null;
+  const px = (quote as Record<string, unknown>)[key === "bid" ? "bp" : "ap"];
+  const value = typeof px === "string" ? Number(px) : Number(px);
+  return Number.isFinite(value) && value > 0 ? value : null;
+}
+
+async function fetchOptionSnapshots(
+  symbols: string[],
+): Promise<{
+  bySymbol: Map<string, { bid: number | null; ask: number | null; mid: number | null; delta: number | null }>;
+  note: string | null;
+}> {
+  const bySymbol = new Map<
+    string,
+    { bid: number | null; ask: number | null; mid: number | null; delta: number | null }
+  >();
+  if (!symbols.length) return { bySymbol, note: null };
+  const { dataBase } = credentials();
+  let note: string | null = null;
+
+  for (let i = 0; i < symbols.length; i += 50) {
+    const chunk = symbols.slice(i, i + 50);
+    const load = async (feed?: string) => {
+      const query = new URLSearchParams({ symbols: chunk.join(",") });
+      if (feed) query.set("feed", feed);
+      return alpacaFetch<Record<string, unknown>>(`${dataBase}/v1beta1/options/snapshots?${query}`);
+    };
+    let res = await load();
+    if (!res.ok) res = await load("indicative");
+    if (!res.ok) {
+      note = res.error;
+      continue;
+    }
+    const snaps = res.data["snapshots"];
+    if (!snaps || typeof snaps !== "object") continue;
+    for (const [symbol, snap] of Object.entries(snaps as Record<string, unknown>)) {
+      const bid = readQuoteSide(snap, "bid");
+      const ask = readQuoteSide(snap, "ask");
+      const mid = bid != null && ask != null ? (bid + ask) / 2 : bid ?? ask;
+      bySymbol.set(symbol.toUpperCase(), {
+        bid,
+        ask,
+        mid: mid ?? null,
+        delta: readDelta(snap),
+      });
+    }
+  }
+
+  return { bySymbol, note };
+}
+
+export async function fetchOptionContractsForUnderlying(
+  underlying: string,
+  opts?: { dteMin?: number; dteMax?: number },
+): Promise<{ ok: true; contracts: OptionContractQuote[]; note: string | null } | { ok: false; error: string }> {
+  const dteMin = opts?.dteMin ?? OPTIONS_DTE_MIN;
+  const dteMax = opts?.dteMax ?? OPTIONS_DTE_MAX;
+  const query = new URLSearchParams({
+    underlying_symbols: underlying.toUpperCase(),
+    status: "active",
+    expiration_date_gte: ymdPlusDays(dteMin - 2),
+    expiration_date_lte: ymdPlusDays(dteMax + 2),
+    limit: "1000",
+  });
+  const res = await alpacaGet<Record<string, unknown>>(`/options/contracts?${query}`);
+  if (!res.ok) return { ok: false, error: res.error };
+  const rawList = res.data["option_contracts"];
+  const rows = Array.isArray(rawList) ? (rawList as Record<string, unknown>[]) : [];
+  const contracts = rows.map(mapContract).filter((c): c is OptionContractQuote => c != null);
+  if (!contracts.length) {
+    return { ok: true, contracts: [], note: `No active contracts for ${underlying.toUpperCase()}.` };
+  }
+
+  const snaps = await fetchOptionSnapshots(contracts.map((c) => c.symbol));
+  for (const c of contracts) {
+    const snap = snaps.bySymbol.get(c.symbol);
+    if (!snap) continue;
+    c.bid = snap.bid;
+    c.ask = snap.ask;
+    c.mid = snap.mid;
+    c.delta = snap.delta;
+  }
+  return { ok: true, contracts, note: snaps.note };
+}
+
+export async function fetchUnderlyingLastPrice(
+  symbol: string,
+): Promise<{ ok: true; price: number } | { ok: false; error: string }> {
+  const { dataBase } = credentials();
+  const upper = symbol.toUpperCase();
+  const tradeUrl = `${dataBase}/v2/stocks/${encodeURIComponent(upper)}/trades/latest`;
+  let res = await alpacaFetch<Record<string, unknown>>(tradeUrl);
+  if (!res.ok) {
+    const q = new URLSearchParams({ symbols: upper, feed: "iex" });
+    res = await alpacaFetch<Record<string, unknown>>(`${dataBase}/v2/stocks/trades/latest?${q}`);
+  }
+  if (!res.ok) return { ok: false, error: res.error };
+
+  const trade =
+    (res.data["trade"] as Record<string, unknown> | undefined) ??
+    ((res.data["trades"] as Record<string, unknown> | undefined)?.[upper] as
+      | Record<string, unknown>
+      | undefined);
+  const price = num(trade?.["p"] ?? trade?.["price"]);
+  if (!(price > 0)) return { ok: false, error: `No last trade for ${upper}.` };
+  return { ok: true, price };
+}
+
+export interface SignalProposalRequest {
+  ticker: string;
+  compositeScore: number;
+  ivRank: number;
+}
+
+export interface OptionsProposalBatch {
+  live: boolean;
+  asOf: string;
+  paperOnly: boolean;
+  proposals: TradeProposalResult[];
+  notes: string[];
+}
+
+export async function proposeOptionsPaperTrades(
+  signals: SignalProposalRequest[],
+): Promise<OptionsProposalBatch> {
+  const notes: string[] = [];
+  const { keyId, secret, baseUrl } = credentials();
+  if (!keyId || !secret) {
+    return {
+      live: false,
+      asOf: new Date().toISOString(),
+      paperOnly: isPaperTradingBase(baseUrl),
+      proposals: [],
+      notes: [
+        "Alpaca credentials missing. Set ALPACA_API_KEY_ID and ALPACA_API_SECRET_KEY in Cursor secrets.",
+      ],
+    };
+  }
+
+  const paperOnly = isPaperTradingBase(baseUrl);
+  if (!paperOnly) notes.push("Base URL is not paper-api — proposals only; placement blocked.");
+
+  const proposals: TradeProposalResult[] = [];
+  const budget = Math.min(maxNameMarginUsd(), OPTIONS_PAPER_CAPITAL_USD);
+
+  for (const signal of signals) {
+    const ticker = signal.ticker.toUpperCase();
+    const priceRes = await fetchUnderlyingLastPrice(ticker);
+    if (!priceRes.ok) {
+      proposals.push({
+        ok: false,
+        ticker,
+        structure: "skip_low_iv",
+        signal: {
+          ticker,
+          compositeScore: signal.compositeScore,
+          ivRank: signal.ivRank,
+          regime: "q4_low_iv",
+          structure: "skip_low_iv",
+          dteMin: OPTIONS_DTE_MIN,
+          dteMax: OPTIONS_DTE_MAX,
+          shortDelta: 0,
+          wingDelta: null,
+          rationale: priceRes.error,
+        },
+        reason: priceRes.error,
+      });
+      continue;
+    }
+
+    const chainRes = await fetchOptionContractsForUnderlying(ticker);
+    if (!chainRes.ok) {
+      proposals.push({
+        ok: false,
+        ticker,
+        structure: "skip_low_iv",
+        signal: {
+          ticker,
+          compositeScore: signal.compositeScore,
+          ivRank: signal.ivRank,
+          regime: "q4_low_iv",
+          structure: "skip_low_iv",
+          dteMin: OPTIONS_DTE_MIN,
+          dteMax: OPTIONS_DTE_MAX,
+          shortDelta: 0,
+          wingDelta: null,
+          rationale: chainRes.error,
+        },
+        reason: chainRes.error,
+      });
+      continue;
+    }
+    if (chainRes.note) notes.push(`${ticker}: ${chainRes.note}`);
+
+    proposals.push(
+      proposeDefinedRiskTrade({
+        ticker,
+        compositeScore: signal.compositeScore,
+        ivRank: signal.ivRank,
+        underlyingPrice: priceRes.price,
+        contracts: chainRes.contracts,
+        capitalBudgetUsd: budget,
+      }),
+    );
+  }
+
+  return {
+    live: true,
+    asOf: new Date().toISOString(),
+    paperOnly,
+    proposals,
+    notes,
+  };
+}
+
+export interface PlaceOptionsOrderRequest {
+  confirm: boolean;
+  qty: number;
+  limitPrice: number;
+  legs: Array<{
+    symbol: string;
+    side: "buy" | "sell";
+    positionIntent: "buy_to_open" | "sell_to_open";
+    ratioQty?: number;
+  }>;
+  structure?: OptionsStructure;
+  ticker?: string;
+}
+
+export interface PlaceOptionsOrderResult {
+  ok: boolean;
+  dryRun: boolean;
+  orderId: string | null;
+  status: string | null;
+  payload: MlegOrderPayload | null;
+  error: string | null;
+}
+
+export async function placeOptionsPaperOrder(
+  req: PlaceOptionsOrderRequest,
+): Promise<PlaceOptionsOrderResult> {
+  const empty = (error: string, dryRun = true): PlaceOptionsOrderResult => ({
+    ok: false,
+    dryRun,
+    orderId: null,
+    status: null,
+    payload: null,
+    error,
+  });
+
+  if (!req.confirm) {
+    return empty("Set confirm=true to submit a paper mleg order.");
+  }
+  if (!isPaperTradingBase()) {
+    return empty("Refusing order: ALPACA_API_BASE_URL is not paper-api.alpaca.markets.");
+  }
+  if (req.structure === "skip_low_iv") {
+    return empty("Refusing skip_low_iv — no order.");
+  }
+  if (!(req.qty > 0) || !Number.isFinite(req.qty)) {
+    return empty("Invalid qty.");
+  }
+  if (!req.legs?.length || req.legs.length > 4) {
+    return empty("mleg orders need 1–4 legs.");
+  }
+  if (!(req.limitPrice < 0)) {
+    return empty("Credit spreads require a negative limit_price (Alpaca credit convention).");
+  }
+
+  const payload = {
+    order_class: "mleg" as const,
+    qty: String(Math.floor(req.qty)),
+    type: "limit" as const,
+    limit_price: String(req.limitPrice),
+    time_in_force: "day" as const,
+    legs: req.legs.map((leg) => ({
+      symbol: leg.symbol.toUpperCase(),
+      ratio_qty: String(leg.ratioQty ?? 1),
+      side: leg.side,
+      position_intent: leg.positionIntent,
+    })),
+  };
+  const res = await alpacaPost<Record<string, unknown>>("/orders", payload);
+  if (!res.ok) {
+    return {
+      ok: false,
+      dryRun: false,
+      orderId: null,
+      status: null,
+      payload,
+      error: res.error,
+    };
+  }
+
+  return {
+    ok: true,
+    dryRun: false,
+    orderId: str(res.data["id"]) || null,
+    status: str(res.data["status"]) || null,
+    payload,
+    error: null,
   };
 }

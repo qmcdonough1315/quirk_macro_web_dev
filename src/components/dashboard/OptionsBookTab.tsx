@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 
 import { OptionsSleevePanel } from "@/components/dashboard/OptionsSleevePanel";
+import { OptionsTradeDesk } from "@/components/dashboard/OptionsTradeDesk";
 import { getAlpacaPaperLedger } from "@/lib/alpaca.functions";
 import {
   CASH_MARGIN_RESERVE_USD,
@@ -247,6 +248,7 @@ export function OptionsBookTab() {
         ) : null}
       </section>
 
+      <OptionsTradeDesk live={live} />
       <OptionsSleevePanel />
     </div>
   );
