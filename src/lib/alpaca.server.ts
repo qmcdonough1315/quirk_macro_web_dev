@@ -125,7 +125,7 @@ async function alpacaFetch<T>(
     return {
       ok: false,
       error:
-        "Alpaca credentials missing. Set ALPACA_API_KEY_ID and ALPACA_API_SECRET_KEY in Cursor secrets.",
+        "Alpaca credentials missing. Set ALPACA_API_KEY_ID and ALPACA_API_SECRET_KEY in Vercel (Production) and redeploy, or in Cursor secrets.",
     };
   }
 
@@ -551,7 +551,7 @@ export async function proposeOptionsPaperTrades(
       paperOnly: isPaperTradingBase(baseUrl),
       proposals: [],
       notes: [
-        "Alpaca credentials missing. Set ALPACA_API_KEY_ID and ALPACA_API_SECRET_KEY in Cursor secrets.",
+        "Alpaca credentials missing. Set ALPACA_API_KEY_ID and ALPACA_API_SECRET_KEY in Vercel (Production) and redeploy, or in Cursor secrets.",
       ],
     };
   }

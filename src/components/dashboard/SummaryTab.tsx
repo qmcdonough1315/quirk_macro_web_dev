@@ -5,6 +5,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { ArrowUpRight, Landmark, LayoutDashboard, PiggyBank, Scale, Waves } from "lucide-react";
 
 import { getAlpacaPaperLedger } from "@/lib/alpaca.functions";
+import { alpacaSummaryLabel, classifyAlpacaConnection } from "@/lib/alpaca-status";
 import { fetchCashManagerYields } from "@/lib/cash-manager";
 import {
   CASH_MARGIN_RESERVE_USD,
@@ -125,6 +126,10 @@ export function SummaryTab() {
   const runCount = snap?.runCount ?? 0;
   const etfFloat = snap?.etfFloatRemaining ?? ETF_TARGET_CAPITAL_USD;
   const alpacaLive = Boolean(alpaca.data?.live);
+  const alpacaConn = classifyAlpacaConnection({
+    live: alpacaLive,
+    ...(alpaca.data?.notes != null ? { notes: alpaca.data.notes } : {}),
+  });
   const feed = alpacaLive ? (alpaca.data?.optionsFeed ?? null) : null;
   const partitions = cashPartitions({
     etfFloatRemaining: etfFloat,
@@ -214,7 +219,7 @@ export function SummaryTab() {
               ? "Loading"
               : [
                   snap?.live ? `${runCount} ETF runs · since ${since}` : "Awaiting ETF history",
-                  alpacaLive ? "Alpaca paper live" : "Alpaca awaiting secrets",
+                  alpacaSummaryLabel(alpacaConn),
                 ].join(" · ")}
           </span>
         </div>
@@ -339,13 +344,25 @@ export function SummaryTab() {
           <Metric
             label="BP used"
             value={optionCell(feed?.bpUsed, (n) => usd(n))}
-            note={alpacaLive ? `${feed?.spreads.length ?? 0} open spreads` : "Add Alpaca secrets"}
+            note={
+              alpacaLive
+                ? `${feed?.spreads.length ?? 0} open spreads`
+                : alpacaConn === "unauthorized"
+                  ? "Alpaca 401 — rotate keys"
+                  : "Add Alpaca secrets + redeploy"
+            }
             tone={feed?.bpUsed == null ? "muted" : undefined}
           />
           <Metric
             label="Open options P&L"
             value={optionCell(feed?.unrealizedPl, (n) => usd(n, 2))}
-            note={alpacaLive ? `${feed?.openLegCount ?? 0} option legs` : "Awaiting Alpaca"}
+            note={
+              alpacaLive
+                ? `${feed?.openLegCount ?? 0} option legs`
+                : alpacaConn === "unauthorized"
+                  ? "Unauthorized keys"
+                  : "Awaiting Alpaca"
+            }
             tone={pnlTone(feed?.unrealizedPl)}
           />
           <Metric
@@ -417,11 +434,11 @@ export function SummaryTab() {
             those figures.
           </li>
           <li>
-            Options cells stay &quot;Not live&quot; until Alpaca secrets are set, or when an
-            unpaired short leaves buying power and max loss undefined. A live book with no option
-            positions is flat: those cells are $0, not a missing feed. Buying power used is
-            defined-risk margin (credit-spread max loss). β-weighted delta needs a greek on every
-            open leg.
+            Options cells stay &quot;Not live&quot; until Alpaca secrets are set on Vercel
+            Production (then redeploy), or when keys return 401, or when an unpaired short leaves
+            buying power and max loss undefined. A live book with no option positions is flat:
+            those cells are $0, not a missing feed. Buying power used is defined-risk margin
+            (credit-spread max loss). β-weighted delta needs a greek on every open leg.
           </li>
           <li>
             Committed capital target remains {usd(TOTAL_PAPER_BOOK_USD)}; during the DCA ramp, ETF
