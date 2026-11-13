@@ -124,7 +124,7 @@ export function buildOptionsSignal(
     dteMax: OPTIONS_DTE_MAX,
     shortDelta: 0,
     wingDelta: null,
-    rationale: "IV Rank below gate — do not sell cheap volatility.",
+    rationale: "IV Rank below gate — stand aside; Phase 1 does not buy cheap vol.",
   };
 }
 

@@ -128,12 +128,13 @@ export function OptionsTradeDesk({
         <h2 className="font-display text-base font-semibold tracking-tight">
           Paper trade desk
         </h2>
-        <span className="label-caps ml-auto">Live IVR · ranker-only · no demo signals</span>
+        <span className="label-caps ml-auto">Phase 1 · sell rich IVR · HITL paper</span>
       </div>
       <p className="mb-5 max-w-3xl text-sm text-muted-foreground">
-        Builds defined-risk credits from live Supabase IV Rank plus published{" "}
-        <span className="font-mono text-[11px]">options_composite</span> scores, prices them on the
-        Alpaca chain, ranks by POP proxy / credit quality / IVR, then places paper mleg orders.
+        Phase 1 harvests elevated IV Rank with defined-risk credit spreads and stands aside when IV
+        is cheap (IVR &lt; 30) — it does not buy undervalued vol. Builds proposals from live Supabase
+        IV Rank plus published <span className="font-mono text-[11px]">options_composite</span>{" "}
+        scores, prices them on the Alpaca chain, then places paper mleg only after you confirm.
         Missing live inputs are skipped — never filled with demo data. Place submits {PLACE_QTY}{" "}
         contract by default.
       </p>
