@@ -51,14 +51,49 @@ const signalSchema = z.object({
 });
 
 const proposeSchema = z.object({
-  signals: z.array(signalSchema).min(1).max(14),
+  /** When omitted/empty, server loads live IVR + options_composite (no demo fill). */
+  signals: z.array(signalSchema).max(14).optional(),
+  useLiveSignals: z.boolean().optional(),
 });
+
+export const getLiveOptionsSignalBoard = createServerFn({ method: "GET" }).handler(
+  async () => {
+    const { buildLiveOptionsSignalBoard } = await import("./options-signals.server");
+    return buildLiveOptionsSignalBoard();
+  },
+);
 
 export const proposeAlpacaOptionsTrades = createServerFn({ method: "POST" })
   .validator((input: unknown) => proposeSchema.parse(input))
   .handler(async ({ data }): Promise<OptionsProposalBatch> => {
     try {
-      return await proposeOptionsPaperTrades(data.signals);
+      let signals = data.signals ?? [];
+      const notes: string[] = [];
+      if (data.useLiveSignals || signals.length === 0) {
+        const { buildLiveOptionsSignalBoard, readySignalsForPropose } = await import(
+          "./options-signals.server"
+        );
+        const board = await buildLiveOptionsSignalBoard();
+        notes.push(...board.notes);
+        signals = readySignalsForPropose(board);
+        if (!signals.length) {
+          return {
+            live: board.live,
+            asOf: board.asOf,
+            paperOnly: true,
+            proposals: [],
+            notes: [
+              ...notes,
+              "No ready live signals (need both IV Rank and options_composite). Refusing demo fill.",
+            ],
+          };
+        }
+      }
+      const batch = await proposeOptionsPaperTrades(signals);
+      return {
+        ...batch,
+        notes: [...notes, ...batch.notes],
+      };
     } catch (err) {
       const message = err instanceof Error ? err.message : "Options proposal failed";
       return {
