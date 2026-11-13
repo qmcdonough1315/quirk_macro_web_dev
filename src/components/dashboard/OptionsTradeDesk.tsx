@@ -1,22 +1,17 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Loader2, Send, Sparkles } from "lucide-react";
 
 import {
+  getLiveOptionsSignalBoard,
   placeAlpacaOptionsOrder,
   proposeAlpacaOptionsTrades,
   type TradeProposal,
   type TradeProposalResult,
 } from "@/lib/alpaca.functions";
 import type { AlpacaConnStatus } from "@/lib/alpaca-status";
-
-const SIGNAL_DESK = [
-  { ticker: "SPY", compositeScore: 0.9, ivRank: 55 },
-  { ticker: "XLK", compositeScore: -0.8, ivRank: 62 },
-  { ticker: "XLU", compositeScore: 0.1, ivRank: 48 },
-  { ticker: "QQQ", compositeScore: 0.7, ivRank: 22 },
-] as const;
+import { compareRankScore, rankCreditProposal } from "@/lib/options-ranker";
 
 /** Paper desk places 1 lot by default; sizing still shown on the proposal row. */
 const PLACE_QTY = 1;
@@ -41,33 +36,51 @@ export function OptionsTradeDesk({
   connection: AlpacaConnStatus;
 }) {
   const queryClient = useQueryClient();
+  const boardFn = useServerFn(getLiveOptionsSignalBoard);
   const proposeFn = useServerFn(proposeAlpacaOptionsTrades);
   const placeFn = useServerFn(placeAlpacaOptionsOrder);
   const [proposals, setProposals] = useState<TradeProposalResult[]>([]);
   const [notes, setNotes] = useState<string[]>([]);
   const [message, setMessage] = useState<string | null>(null);
 
+  const board = useQuery({
+    queryKey: ["options-live-signal-board"],
+    queryFn: () => boardFn(),
+    staleTime: 60_000,
+    retry: 1,
+  });
+
+  const ranked = useMemo(() => {
+    const ivByTicker = new Map(
+      (board.data?.ivRanks ?? []).map((r) => [r.ticker.toUpperCase(), r.ivRank]),
+    );
+    return [...proposals]
+      .map((row) => {
+        if (!isProposal(row)) return { row, rank: null as ReturnType<typeof rankCreditProposal> | null };
+        const ivRank = ivByTicker.get(row.ticker.toUpperCase()) ?? row.signal.ivRank;
+        return { row, rank: rankCreditProposal(row, ivRank) };
+      })
+      .sort((a, b) => {
+        if (a.rank && b.rank) return compareRankScore(a.rank, b.rank);
+        if (a.rank) return -1;
+        if (b.rank) return 1;
+        return a.row.ticker.localeCompare(b.row.ticker);
+      });
+  }, [proposals, board.data?.ivRanks]);
+
   const propose = useMutation({
-    mutationFn: () =>
-      proposeFn({
-        data: {
-          signals: SIGNAL_DESK.map((s) => ({
-            ticker: s.ticker,
-            compositeScore: s.compositeScore,
-            ivRank: s.ivRank,
-          })),
-        },
-      }),
+    mutationFn: () => proposeFn({ data: { useLiveSignals: true } }),
     onSuccess: (batch) => {
       setProposals(batch.proposals);
       setNotes(batch.notes);
       const ok = batch.proposals.filter((p) => p.ok).length;
       const skipped = batch.proposals.length - ok;
       setMessage(
-        batch.live
+        batch.live || ok > 0 || batch.notes.length
           ? `Proposed ${ok} trade(s), skipped ${skipped} · ${batch.asOf}`
           : (batch.notes[0] ?? "Proposal unavailable"),
       );
+      void queryClient.invalidateQueries({ queryKey: ["options-live-signal-board"] });
     },
     onError: (err) => {
       setProposals([]);
@@ -115,13 +128,65 @@ export function OptionsTradeDesk({
         <h2 className="font-display text-base font-semibold tracking-tight">
           Paper trade desk
         </h2>
-        <span className="label-caps ml-auto">Alpaca mleg · credit only</span>
+        <span className="label-caps ml-auto">Live IVR · ranker-only · no demo signals</span>
       </div>
       <p className="mb-5 max-w-3xl text-sm text-muted-foreground">
-        Build defined-risk credit structures from the factor×IVR examples, price them on the live
-        option chain, then submit paper multi-leg orders (negative limit = credit). Place submits{" "}
-        {PLACE_QTY} contract by default.
+        Builds defined-risk credits from live Supabase IV Rank plus published{" "}
+        <span className="font-mono text-[11px]">options_composite</span> scores, prices them on the
+        Alpaca chain, ranks by POP proxy / credit quality / IVR, then places paper mleg orders.
+        Missing live inputs are skipped — never filled with demo data. Place submits {PLACE_QTY}{" "}
+        contract by default.
       </p>
+
+      <div className="mb-5 overflow-x-auto rounded-lg border border-border/70">
+        <table className="w-full min-w-[720px] text-left text-sm">
+          <thead className="border-b border-border/70 bg-secondary/30 text-xs uppercase tracking-wider text-muted-foreground">
+            <tr>
+              <th className="px-3 py-2.5 font-medium">Ticker</th>
+              <th className="px-3 py-2.5 font-medium text-right">Composite</th>
+              <th className="px-3 py-2.5 font-medium text-right">IVR</th>
+              <th className="px-3 py-2.5 font-medium">Structure</th>
+              <th className="px-3 py-2.5 font-medium">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {board.isPending ? (
+              <tr>
+                <td colSpan={5} className="px-3 py-4 text-sm text-muted-foreground">
+                  Loading live IVR / composites…
+                </td>
+              </tr>
+            ) : (board.data?.rows.length ?? 0) === 0 ? (
+              <tr>
+                <td colSpan={5} className="px-3 py-4 text-sm text-muted-foreground">
+                  No live signal board yet.
+                </td>
+              </tr>
+            ) : (
+              board.data!.rows.map((row) => (
+                <tr key={row.ticker} className="border-b border-border/40 last:border-0">
+                  <td className="px-3 py-2.5 font-mono font-semibold">{row.ticker}</td>
+                  <td className="px-3 py-2.5 text-right font-mono tabular-nums">
+                    {row.compositeScore == null ? "—" : row.compositeScore.toFixed(2)}
+                  </td>
+                  <td className="px-3 py-2.5 text-right font-mono tabular-nums">
+                    {row.ivRank == null ? "—" : `${row.ivRank.toFixed(1)}%`}
+                  </td>
+                  <td className="px-3 py-2.5 font-mono text-xs">
+                    {row.signal?.structure ?? "—"}
+                  </td>
+                  <td className="px-3 py-2.5 text-xs text-muted-foreground">
+                    {row.ready ? "Ready" : row.skipReason ?? "Not ready"}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+      {board.data?.notes?.length ? (
+        <p className="mb-4 text-xs text-muted-foreground">{board.data.notes.join(" · ")}</p>
+      ) : null}
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <button
@@ -135,7 +200,7 @@ export function OptionsTradeDesk({
           ) : (
             <Sparkles className="size-3.5" />
           )}
-          Propose from signals
+          Propose from live signals
         </button>
         {!live ? (
           <p className="text-xs text-muted-foreground">
@@ -154,15 +219,16 @@ export function OptionsTradeDesk({
       ) : null}
 
       <div className="overflow-x-auto rounded-lg border border-border/70">
-        <table className="w-full min-w-[880px] text-left text-sm">
+        <table className="w-full min-w-[1040px] text-left text-sm">
           <thead className="border-b border-border/70 bg-secondary/30 text-xs uppercase tracking-wider text-muted-foreground">
             <tr>
+              <th className="px-3 py-2.5 font-medium">Rank</th>
               <th className="px-3 py-2.5 font-medium">Ticker</th>
               <th className="px-3 py-2.5 font-medium">Structure</th>
+              <th className="px-3 py-2.5 font-medium text-right">POP≈</th>
+              <th className="px-3 py-2.5 font-medium text-right">Credit/width</th>
               <th className="px-3 py-2.5 font-medium">Expiry</th>
-              <th className="px-3 py-2.5 font-medium text-right">Qty</th>
               <th className="px-3 py-2.5 font-medium text-right">Credit</th>
-              <th className="px-3 py-2.5 font-medium text-right">Limit</th>
               <th className="px-3 py-2.5 font-medium text-right">Est. BP</th>
               <th className="px-3 py-2.5 font-medium">Legs / reason</th>
               <th className="px-3 py-2.5 font-medium text-right">Place</th>
@@ -171,21 +237,22 @@ export function OptionsTradeDesk({
           <tbody>
             {propose.isPending ? (
               <tr>
-                <td colSpan={9} className="px-3 py-4 text-sm text-muted-foreground">
+                <td colSpan={10} className="px-3 py-4 text-sm text-muted-foreground">
                   Pricing chains…
                 </td>
               </tr>
-            ) : proposals.length === 0 ? (
+            ) : ranked.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-3 py-4 text-sm text-muted-foreground">
-                  No proposals yet — run Propose from signals.
+                <td colSpan={10} className="px-3 py-4 text-sm text-muted-foreground">
+                  No proposals yet — run Propose from live signals.
                 </td>
               </tr>
             ) : (
-              proposals.map((row) => {
+              ranked.map(({ row, rank }, idx) => {
                 if (!isProposal(row)) {
                   return (
                     <tr key={`${row.ticker}-skip`} className="border-b border-border/40 last:border-0">
+                      <td className="px-3 py-2.5 font-mono text-xs text-muted-foreground">—</td>
                       <td className="px-3 py-2.5 font-mono font-semibold">{row.ticker}</td>
                       <td className="px-3 py-2.5 font-mono text-xs">{row.structure}</td>
                       <td className="px-3 py-2.5 text-xs text-muted-foreground" colSpan={5}>
@@ -205,22 +272,25 @@ export function OptionsTradeDesk({
                     key={`${row.ticker}-${row.structure}-${row.expirationDate}`}
                     className="border-b border-border/40 last:border-0"
                   >
+                    <td className="px-3 py-2.5 font-mono tabular-nums">
+                      #{idx + 1}
+                      <span className="ml-1 text-[10px] text-muted-foreground">
+                        {rank ? rank.score.toFixed(1) : "—"}
+                      </span>
+                    </td>
                     <td className="px-3 py-2.5 font-mono font-semibold">{row.ticker}</td>
                     <td className="px-3 py-2.5 font-mono text-xs">{row.structure}</td>
+                    <td className="px-3 py-2.5 text-right font-mono tabular-nums">
+                      {rank?.popProxy == null ? "—" : `${(rank.popProxy * 100).toFixed(0)}%`}
+                    </td>
+                    <td className="px-3 py-2.5 text-right font-mono tabular-nums">
+                      {rank?.creditToWidth == null ? "—" : rank.creditToWidth.toFixed(2)}
+                    </td>
                     <td className="px-3 py-2.5 font-mono text-xs">
                       {row.expirationDate} · {row.dte}d
                     </td>
                     <td className="px-3 py-2.5 text-right font-mono tabular-nums">
-                      {PLACE_QTY}
-                      <span className="ml-1 text-[10px] text-muted-foreground">
-                        /{row.qty}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2.5 text-right font-mono tabular-nums">
                       {usd(row.creditPerShare)}
-                    </td>
-                    <td className="px-3 py-2.5 text-right font-mono tabular-nums">
-                      {row.limitPrice.toFixed(2)}
                     </td>
                     <td className="px-3 py-2.5 text-right font-mono tabular-nums">
                       {usd(row.maxLossPerContract * PLACE_QTY, 0)}
