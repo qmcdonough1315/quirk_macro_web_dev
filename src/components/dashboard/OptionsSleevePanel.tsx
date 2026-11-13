@@ -40,7 +40,7 @@ export function OptionsSleevePanel() {
         <h2 className="font-display text-base font-semibold tracking-tight">
           Options / Vol Sleeve — {usd(OPTIONS_PAPER_CAPITAL_USD)} Paper
         </h2>
-        <span className="label-caps ml-auto">Phase 1 · live IVR board</span>
+        <span className="label-caps ml-auto">Phase 1 · rich IVR only · skip cheap</span>
       </div>
       <p className="mb-5 max-w-3xl text-sm text-muted-foreground">
         Separate from the long-only ETF book. Live IV Rank from{" "}
