@@ -77,8 +77,8 @@
         "ann_vol": 0.0,
         "sharpe": 0.0,
         "max_drawdown": 0.0,
-        "hit_rate_vs_benchmark": NaN,
-        "excess_total_vs_benchmark": NaN,
+        "hit_rate_vs_benchmark": null,
+        "excess_total_vs_benchmark": null,
         "status": "ok",
         "n_trades": 0,
         "window_start": "2025-11-10",
@@ -107,8 +107,8 @@
           "ann_vol": 0.10910596997221203,
           "sharpe": 1.1694772887157983,
           "max_drawdown": -0.12373636473780025,
-          "hit_rate_vs_benchmark": NaN,
-          "excess_total_vs_benchmark": NaN
+          "hit_rate_vs_benchmark": null,
+          "excess_total_vs_benchmark": null
         },
         "JEPI": {
           "n_periods": 27,
@@ -117,8 +117,8 @@
           "ann_vol": 0.07037271788624097,
           "sharpe": 0.8733702884156825,
           "max_drawdown": -0.03978081244460385,
-          "hit_rate_vs_benchmark": NaN,
-          "excess_total_vs_benchmark": NaN
+          "hit_rate_vs_benchmark": null,
+          "excess_total_vs_benchmark": null
         },
         "VOO_JEPI_50_50": {
           "n_periods": 27,
@@ -127,8 +127,8 @@
           "ann_vol": 0.08451396978537751,
           "sharpe": 1.1185038126999818,
           "max_drawdown": -0.07232693711628713,
-          "hit_rate_vs_benchmark": NaN,
-          "excess_total_vs_benchmark": NaN
+          "hit_rate_vs_benchmark": null,
+          "excess_total_vs_benchmark": null
         },
         "VGT": {
           "n_periods": 27,
@@ -137,8 +137,8 @@
           "ann_vol": 0.16159836838088748,
           "sharpe": 1.2214341639373767,
           "max_drawdown": -0.21680742346780035,
-          "hit_rate_vs_benchmark": NaN,
-          "excess_total_vs_benchmark": NaN
+          "hit_rate_vs_benchmark": null,
+          "excess_total_vs_benchmark": null
         }
       }
     },
@@ -171,8 +171,8 @@
         "ann_vol": 0.0,
         "sharpe": 0.0,
         "max_drawdown": 0.0,
-        "hit_rate_vs_benchmark": NaN,
-        "excess_total_vs_benchmark": NaN,
+        "hit_rate_vs_benchmark": null,
+        "excess_total_vs_benchmark": null,
         "status": "uncovered",
         "n_trades": 0,
         "reason": "no_iv_overlap",
@@ -203,8 +203,8 @@
           "ann_vol": 0.1341252858845227,
           "sharpe": 2.049452902832356,
           "max_drawdown": 0.0,
-          "hit_rate_vs_benchmark": NaN,
-          "excess_total_vs_benchmark": NaN
+          "hit_rate_vs_benchmark": null,
+          "excess_total_vs_benchmark": null
         },
         "JEPI": {
           "n_periods": 3,
@@ -213,8 +213,8 @@
           "ann_vol": 0.07598808927088047,
           "sharpe": 1.7848465891308822,
           "max_drawdown": 0.0,
-          "hit_rate_vs_benchmark": NaN,
-          "excess_total_vs_benchmark": NaN
+          "hit_rate_vs_benchmark": null,
+          "excess_total_vs_benchmark": null
         },
         "VOO_JEPI_50_50": {
           "n_periods": 3,
@@ -223,8 +223,8 @@
           "ann_vol": 0.09986952162527434,
           "sharpe": 2.055234328593546,
           "max_drawdown": 0.0,
-          "hit_rate_vs_benchmark": NaN,
-          "excess_total_vs_benchmark": NaN
+          "hit_rate_vs_benchmark": null,
+          "excess_total_vs_benchmark": null
         },
         "VGT": {
           "n_periods": 3,
@@ -233,8 +233,8 @@
           "ann_vol": 0.23855685290513706,
           "sharpe": 2.0918951595062465,
           "max_drawdown": 0.0,
-          "hit_rate_vs_benchmark": NaN,
-          "excess_total_vs_benchmark": NaN
+          "hit_rate_vs_benchmark": null,
+          "excess_total_vs_benchmark": null
         }
       }
     },
@@ -267,8 +267,8 @@
         "ann_vol": 0.0,
         "sharpe": 0.0,
         "max_drawdown": 0.0,
-        "hit_rate_vs_benchmark": NaN,
-        "excess_total_vs_benchmark": NaN,
+        "hit_rate_vs_benchmark": null,
+        "excess_total_vs_benchmark": null,
         "status": "uncovered",
         "n_trades": 0,
         "reason": "no_iv_overlap",
@@ -299,8 +299,8 @@
           "ann_vol": 0.09418581243628803,
           "sharpe": -1.0891312535801931,
           "max_drawdown": -0.03961740703964334,
-          "hit_rate_vs_benchmark": NaN,
-          "excess_total_vs_benchmark": NaN
+          "hit_rate_vs_benchmark": null,
+          "excess_total_vs_benchmark": null
         },
         "JEPI": {
           "n_periods": 3,
@@ -309,8 +309,8 @@
           "ann_vol": 0.08499569520875463,
           "sharpe": 0.1861180630218786,
           "max_drawdown": -0.02054109341379584,
-          "hit_rate_vs_benchmark": NaN,
-          "excess_total_vs_benchmark": NaN
+          "hit_rate_vs_benchmark": null,
+          "excess_total_vs_benchmark": null
         },
         "VOO_JEPI_50_50": {
           "n_periods": 3,
@@ -319,8 +319,8 @@
           "ann_vol": 0.08856222937757632,
           "sharpe": -0.4898334110405743,
           "max_drawdown": -0.030079250226719534,
-          "hit_rate_vs_benchmark": NaN,
-          "excess_total_vs_benchmark": NaN
+          "hit_rate_vs_benchmark": null,
+          "excess_total_vs_benchmark": null
         },
         "VGT": {
           "n_periods": 3,
@@ -329,8 +329,8 @@
           "ann_vol": 0.10613913421516222,
           "sharpe": -1.9992805605305226,
           "max_drawdown": -0.03236144780944206,
-          "hit_rate_vs_benchmark": NaN,
-          "excess_total_vs_benchmark": NaN
+          "hit_rate_vs_benchmark": null,
+          "excess_total_vs_benchmark": null
         }
       }
     },
@@ -363,8 +363,8 @@
         "ann_vol": 0.0,
         "sharpe": 0.0,
         "max_drawdown": 0.0,
-        "hit_rate_vs_benchmark": NaN,
-        "excess_total_vs_benchmark": NaN,
+        "hit_rate_vs_benchmark": null,
+        "excess_total_vs_benchmark": null,
         "status": "uncovered",
         "n_trades": 0,
         "reason": "no_iv_overlap",
@@ -395,8 +395,8 @@
           "ann_vol": 0.07722878745409313,
           "sharpe": 2.903380664611987,
           "max_drawdown": 0.0,
-          "hit_rate_vs_benchmark": NaN,
-          "excess_total_vs_benchmark": NaN
+          "hit_rate_vs_benchmark": null,
+          "excess_total_vs_benchmark": null
         },
         "JEPI": {
           "n_periods": 5,
@@ -405,8 +405,8 @@
           "ann_vol": 0.048077501822172734,
           "sharpe": 2.007434435648427,
           "max_drawdown": 0.0,
-          "hit_rate_vs_benchmark": NaN,
-          "excess_total_vs_benchmark": NaN
+          "hit_rate_vs_benchmark": null,
+          "excess_total_vs_benchmark": null
         },
         "VOO_JEPI_50_50": {
           "n_periods": 5,
@@ -415,8 +415,8 @@
           "ann_vol": 0.06251594685155451,
           "sharpe": 2.565241487464146,
           "max_drawdown": 0.0,
-          "hit_rate_vs_benchmark": NaN,
-          "excess_total_vs_benchmark": NaN
+          "hit_rate_vs_benchmark": null,
+          "excess_total_vs_benchmark": null
         },
         "VGT": {
           "n_periods": 5,
@@ -425,8 +425,8 @@
           "ann_vol": 0.1274582657217127,
           "sharpe": 2.613438153163093,
           "max_drawdown": 0.0,
-          "hit_rate_vs_benchmark": NaN,
-          "excess_total_vs_benchmark": NaN
+          "hit_rate_vs_benchmark": null,
+          "excess_total_vs_benchmark": null
         }
       }
     },
@@ -459,8 +459,8 @@
         "ann_vol": 0.10328384152572226,
         "sharpe": 1.2270381351922033,
         "max_drawdown": 0.0,
-        "hit_rate_vs_benchmark": NaN,
-        "excess_total_vs_benchmark": NaN,
+        "hit_rate_vs_benchmark": null,
+        "excess_total_vs_benchmark": null,
         "status": "ok",
         "n_trades": 88,
         "window_start": "2025-11-10",
@@ -489,8 +489,8 @@
           "ann_vol": 0.0952361877070889,
           "sharpe": 1.2428142397984911,
           "max_drawdown": -0.014584409564968981,
-          "hit_rate_vs_benchmark": NaN,
-          "excess_total_vs_benchmark": NaN
+          "hit_rate_vs_benchmark": null,
+          "excess_total_vs_benchmark": null
         },
         "JEPI": {
           "n_periods": 9,
@@ -499,8 +499,8 @@
           "ann_vol": 0.07627089466091948,
           "sharpe": 0.6281847910653666,
           "max_drawdown": -0.04412971771597407,
-          "hit_rate_vs_benchmark": NaN,
-          "excess_total_vs_benchmark": NaN
+          "hit_rate_vs_benchmark": null,
+          "excess_total_vs_benchmark": null
         },
         "VOO_JEPI_50_50": {
           "n_periods": 9,
@@ -509,8 +509,8 @@
           "ann_vol": 0.061087945219401266,
           "sharpe": 1.360932223667451,
           "max_drawdown": -0.027143697677950107,
-          "hit_rate_vs_benchmark": NaN,
-          "excess_total_vs_benchmark": NaN
+          "hit_rate_vs_benchmark": null,
+          "excess_total_vs_benchmark": null
         },
         "VGT": {
           "n_periods": 9,
@@ -519,8 +519,8 @@
           "ann_vol": 0.2520778011259079,
           "sharpe": 0.7917925724269976,
           "max_drawdown": -0.07944874762488441,
-          "hit_rate_vs_benchmark": NaN,
-          "excess_total_vs_benchmark": NaN
+          "hit_rate_vs_benchmark": null,
+          "excess_total_vs_benchmark": null
         }
       }
     }
