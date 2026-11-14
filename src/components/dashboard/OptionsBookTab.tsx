@@ -1,9 +1,12 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { Loader2, X } from "lucide-react";
+import { useState } from "react";
 
 import { OptionsSleevePanel } from "@/components/dashboard/OptionsSleevePanel";
 import { OptionsTradeDesk } from "@/components/dashboard/OptionsTradeDesk";
-import { getAlpacaPaperLedger } from "@/lib/alpaca.functions";
+import { useTradingAdminSession } from "@/components/dashboard/TradingAdminGate";
+import { cancelAlpacaOrder, getAlpacaPaperLedger } from "@/lib/alpaca.functions";
 import { alpacaStatusLabel, classifyAlpacaConnection } from "@/lib/alpaca-status";
 import {
   CASH_MARGIN_RESERVE_USD,
@@ -22,12 +25,33 @@ const usd = (n: number | null | undefined, digits = 0) =>
     : "—";
 
 export function OptionsBookTab() {
+  const queryClient = useQueryClient();
   const fetchLedger = useServerFn(getAlpacaPaperLedger);
+  const cancelFn = useServerFn(cancelAlpacaOrder);
+  const adminSession = useTradingAdminSession();
+  const adminUnlocked = Boolean(adminSession.data?.authenticated);
+  const [cancelMessage, setCancelMessage] = useState<string | null>(null);
+
   const ledger = useQuery({
     queryKey: ["alpaca-paper-ledger"],
     queryFn: () => fetchLedger(),
     staleTime: 60_000,
     retry: 1,
+  });
+
+  const cancel = useMutation({
+    mutationFn: (orderId: string) => cancelFn({ data: { orderId } }),
+    onSuccess: async (result) => {
+      if (result.ok) {
+        setCancelMessage(`Canceled order ${result.orderId?.slice(0, 8) ?? "?"}… (${result.status})`);
+        await queryClient.invalidateQueries({ queryKey: ["alpaca-paper-ledger"] });
+      } else {
+        setCancelMessage(result.error ?? "Cancel rejected");
+      }
+    },
+    onError: (err) => {
+      setCancelMessage(err instanceof Error ? err.message : "Cancel failed");
+    },
   });
 
   const account = ledger.data?.account;
@@ -242,35 +266,84 @@ export function OptionsBookTab() {
         ) : null}
 
         {live && (ledger.data?.openOrders?.length ?? 0) > 0 ? (
-          <div className="mt-5 overflow-x-auto rounded-lg border border-border/70">
-            <table className="w-full min-w-[720px] text-left text-sm">
-              <thead className="border-b border-border/70 bg-secondary/30 text-xs uppercase tracking-wider text-muted-foreground">
-                <tr>
-                  <th className="px-3 py-2.5 font-medium">Open order</th>
-                  <th className="px-3 py-2.5 font-medium">Status</th>
-                  <th className="px-3 py-2.5 font-medium text-right">Qty</th>
-                  <th className="px-3 py-2.5 font-medium text-right">Limit</th>
-                  <th className="px-3 py-2.5 font-medium">Legs</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(ledger.data?.openOrders ?? []).map((order) => (
-                  <tr key={order.id} className="border-b border-border/40 last:border-0">
-                    <td className="px-3 py-2.5 font-mono text-xs">{order.id.slice(0, 8)}…</td>
-                    <td className="px-3 py-2.5 font-mono text-xs">{order.status}</td>
-                    <td className="px-3 py-2.5 text-right font-mono tabular-nums">{order.qty}</td>
-                    <td className="px-3 py-2.5 text-right font-mono tabular-nums">
-                      {order.limitPrice == null ? "—" : order.limitPrice.toFixed(2)}
-                    </td>
-                    <td className="px-3 py-2.5 font-mono text-[11px] text-muted-foreground">
-                      {order.legs.length
-                        ? order.legs.map((l) => `${l.side} ${l.symbol}`).join(" · ")
-                        : order.symbol}
-                    </td>
+          <div className="mt-5 space-y-3">
+            {cancelMessage ? (
+              <p className="text-xs text-muted-foreground">{cancelMessage}</p>
+            ) : null}
+            {!adminUnlocked ? (
+              <p className="text-xs text-muted-foreground">
+                Unlock the paper trade desk below to cancel resting / partial orders.
+              </p>
+            ) : null}
+            <div className="overflow-x-auto rounded-lg border border-border/70">
+              <table className="w-full min-w-[820px] text-left text-sm">
+                <thead className="border-b border-border/70 bg-secondary/30 text-xs uppercase tracking-wider text-muted-foreground">
+                  <tr>
+                    <th className="px-3 py-2.5 font-medium">Open order</th>
+                    <th className="px-3 py-2.5 font-medium">Status</th>
+                    <th className="px-3 py-2.5 font-medium text-right">Filled / qty</th>
+                    <th className="px-3 py-2.5 font-medium text-right">Limit</th>
+                    <th className="px-3 py-2.5 font-medium">Legs</th>
+                    <th className="px-3 py-2.5 font-medium text-right">Cancel</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {(ledger.data?.openOrders ?? []).map((order) => {
+                    const partial =
+                      order.filledQty > 0 && order.filledQty < order.qty;
+                    const canceling =
+                      cancel.isPending && cancel.variables === order.id;
+                    return (
+                      <tr
+                        key={order.id}
+                        className={`border-b border-border/40 last:border-0 ${
+                          partial ? "bg-secondary/30" : ""
+                        }`}
+                      >
+                        <td className="px-3 py-2.5 font-mono text-xs">
+                          {order.id.slice(0, 8)}…
+                        </td>
+                        <td className="px-3 py-2.5 font-mono text-xs">
+                          {order.status}
+                          {partial ? " · partial" : ""}
+                        </td>
+                        <td className="px-3 py-2.5 text-right font-mono tabular-nums">
+                          {order.filledQty}/{order.qty}
+                        </td>
+                        <td className="px-3 py-2.5 text-right font-mono tabular-nums">
+                          {order.limitPrice == null ? "—" : order.limitPrice.toFixed(2)}
+                        </td>
+                        <td className="px-3 py-2.5 font-mono text-[11px] text-muted-foreground">
+                          {order.legs.length
+                            ? order.legs.map((l) => `${l.side} ${l.symbol}`).join(" · ")
+                            : order.symbol}
+                        </td>
+                        <td className="px-3 py-2.5 text-right">
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1 rounded-md border border-border/80 px-2 py-1 text-xs font-medium hover:bg-secondary/40 disabled:opacity-50"
+                            disabled={!adminUnlocked || cancel.isPending}
+                            title={
+                              adminUnlocked
+                                ? "Cancel remainder / resting order"
+                                : "Unlock admin desk to cancel"
+                            }
+                            onClick={() => cancel.mutate(order.id)}
+                          >
+                            {canceling ? (
+                              <Loader2 className="size-3 animate-spin" />
+                            ) : (
+                              <X className="size-3" />
+                            )}
+                            Cancel
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         ) : null}
 

@@ -30,6 +30,13 @@ import {
   type TradeProposalResult,
 } from "./options-orders";
 import {
+  buildClientOrderId,
+  conservativeCreditFromQuotes,
+  validateLimitVsConservativeCredit,
+  validateMlegPlaceBasics,
+  type PlaceLegInput,
+} from "./mleg-place-guards";
+import {
   OPTIONS_DTE_MAX,
   OPTIONS_DTE_MIN,
   OPTIONS_PAPER_CAPITAL_USD,
@@ -208,6 +215,14 @@ async function alpacaPost<T>(
   const { baseUrl } = credentials();
   const url = `${baseUrl}/v2${path.startsWith("/") ? path : `/${path}`}`;
   return alpacaFetch<T>(url, { method: "POST", body: JSON.stringify(body) });
+}
+
+async function alpacaDelete<T>(
+  path: string,
+): Promise<{ ok: true; data: T } | { ok: false; error: string }> {
+  const { baseUrl } = credentials();
+  const url = `${baseUrl}/v2${path.startsWith("/") ? path : `/${path}`}`;
+  return alpacaFetch<T>(url, { method: "DELETE" });
 }
 
 export function isPaperTradingBase(baseUrl = credentials().baseUrl): boolean {
@@ -772,24 +787,54 @@ export async function placeOptionsPaperOrder(
   if (req.structure === "skip_low_iv") {
     return empty("Refusing skip_low_iv — no order.");
   }
-  if (!(req.qty > 0) || !Number.isFinite(req.qty)) {
+  if (!(req.qty > 0) || !Number.isFinite(req.qty) || !Number.isInteger(req.qty)) {
     return empty("Invalid qty.");
   }
-  if (!req.legs?.length || req.legs.length > 4) {
-    return empty("mleg orders need 1–4 legs.");
-  }
-  if (!(req.limitPrice < 0)) {
-    return empty("Credit spreads require a negative limit_price (Alpaca credit convention).");
+  if (req.qty > 5) {
+    return empty("Paper Phase 1 caps qty at 5 contracts per place.");
   }
 
-  const payload = {
-    order_class: "mleg" as const,
+  const legs: PlaceLegInput[] = (req.legs ?? []).map((leg) => ({
+    symbol: leg.symbol.toUpperCase(),
+    side: leg.side,
+    positionIntent: leg.positionIntent,
+    ...(leg.ratioQty != null ? { ratioQty: leg.ratioQty } : {}),
+  }));
+
+  const basics = validateMlegPlaceBasics(legs, req.limitPrice);
+  if (!basics.ok) return empty(basics.error);
+
+  const snaps = await fetchOptionSnapshots(legs.map((l) => l.symbol));
+  if (snaps.note && snaps.bySymbol.size === 0) {
+    return empty(`Live option quotes unavailable: ${snaps.note}`);
+  }
+  const quoteMap = new Map(
+    [...snaps.bySymbol.entries()].map(([sym, q]) => [sym, { bid: q.bid, ask: q.ask }]),
+  );
+  const conservative = conservativeCreditFromQuotes(legs, quoteMap);
+  if (conservative == null) {
+    return empty("Missing live bid/ask on one or more legs — refusing place.");
+  }
+  const vsCredit = validateLimitVsConservativeCredit(req.limitPrice, conservative);
+  if (!vsCredit.ok) return empty(vsCredit.error);
+
+  const clientOrderId = buildClientOrderId({
+    qty: Math.floor(req.qty),
+    limitPrice: req.limitPrice,
+    legs,
+    ...(req.ticker != null ? { ticker: req.ticker } : {}),
+    ...(req.structure != null ? { structure: req.structure } : {}),
+  });
+
+  const payload: MlegOrderPayload = {
+    order_class: "mleg",
     qty: String(Math.floor(req.qty)),
-    type: "limit" as const,
+    type: "limit",
     limit_price: String(req.limitPrice),
-    time_in_force: "day" as const,
-    legs: req.legs.map((leg) => ({
-      symbol: leg.symbol.toUpperCase(),
+    time_in_force: "day",
+    client_order_id: clientOrderId,
+    legs: legs.map((leg) => ({
+      symbol: leg.symbol,
       ratio_qty: String(leg.ratioQty ?? 1),
       side: leg.side,
       position_intent: leg.positionIntent,
@@ -797,6 +842,22 @@ export async function placeOptionsPaperOrder(
   };
   const res = await alpacaPost<Record<string, unknown>>("/orders", payload);
   if (!res.ok) {
+    // Duplicate client_order_id → treat as idempotent success if we can resolve the order.
+    if (/client_order_id|already exists|duplicate/i.test(res.error)) {
+      const existing = await alpacaGet<Record<string, unknown>>(
+        `/orders:by_client_order_id?client_order_id=${encodeURIComponent(clientOrderId)}`,
+      );
+      if (existing.ok) {
+        return {
+          ok: true,
+          dryRun: false,
+          orderId: str(existing.data["id"]) || null,
+          status: str(existing.data["status"]) || "accepted",
+          payload,
+          error: null,
+        };
+      }
+    }
     return {
       ok: false,
       dryRun: false,
@@ -813,6 +874,38 @@ export async function placeOptionsPaperOrder(
     orderId: str(res.data["id"]) || null,
     status: str(res.data["status"]) || null,
     payload,
+    error: null,
+  };
+}
+
+export interface CancelAlpacaOrderResult {
+  ok: boolean;
+  orderId: string | null;
+  status: string | null;
+  error: string | null;
+}
+
+export async function cancelAlpacaPaperOrder(orderId: string): Promise<CancelAlpacaOrderResult> {
+  const id = orderId.trim();
+  if (!id) {
+    return { ok: false, orderId: null, status: null, error: "orderId required." };
+  }
+  if (!isPaperTradingBase()) {
+    return {
+      ok: false,
+      orderId: id,
+      status: null,
+      error: "Refusing cancel: ALPACA_API_BASE_URL is not paper-api.alpaca.markets.",
+    };
+  }
+  const res = await alpacaDelete<Record<string, unknown>>(`/orders/${encodeURIComponent(id)}`);
+  if (!res.ok) {
+    return { ok: false, orderId: id, status: null, error: res.error };
+  }
+  return {
+    ok: true,
+    orderId: id,
+    status: str(res.data["status"]) || "canceled",
     error: null,
   };
 }
