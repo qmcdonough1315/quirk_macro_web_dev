@@ -132,8 +132,9 @@ export function ResearchTab() {
             Period matrix
           </h3>
           <p className="mt-1 text-xs text-muted-foreground">
-            Combined book vs peer on each frozen window. Options column shows sleeve return when
-            IV history covers the window; otherwise uncovered / cash-drag.
+            Combined book vs peer on each frozen window. Options column shows sleeve return when IV
+            history covers the window; otherwise <span className="font-mono">uncovered</span> and
+            the combined book uses 100% ETF.
           </p>
         </div>
         <div className="overflow-x-auto">
@@ -227,23 +228,94 @@ export function ResearchTab() {
           <h3 className="font-display text-sm font-semibold tracking-tight">
             How to read this
           </h3>
-          <ul className="mt-4 list-disc space-y-2 pl-5 text-sm text-muted-foreground">
-            <li>
+          <div className="mt-4 space-y-4 text-sm text-muted-foreground">
+            <p>
               Live paper since inception lives on Summary / ETF Model. This tab is the{" "}
-              <em>historical</em> walk-forward pack across market regimes.
-            </li>
-            <li>
-              Combined return is 50% ETF sleeve + 50% options book on the same calendar windows.
-            </li>
-            <li>
-              When options IV history does not cover a stress window, the options leg is treated as
-              idle cash (0%) and labeled uncovered — we do not invent IV.
-            </li>
-            <li>
-              <span className="font-mono text-foreground">HOLD_OUT</span> is locked for reporting;
-              do not tune model knobs on it after freeze.
-            </li>
-          </ul>
+              <em>historical</em> walk-forward pack across frozen market regimes.
+            </p>
+
+            <div>
+              <p className="font-display text-xs font-semibold tracking-tight text-foreground">
+                Column headers
+              </p>
+              <ul className="mt-2 list-disc space-y-1.5 pl-5">
+                <li>
+                  <span className="text-foreground">Period / Story</span> — frozen window id and
+                  what market regime it stresses.
+                </li>
+                <li>
+                  <span className="text-foreground">Combined</span> — total return of the $100k
+                  research book over that window.
+                </li>
+                <li>
+                  <span className="text-foreground">vs peer</span> — excess total return vs{" "}
+                  <span className="font-mono text-foreground">{peer}</span> on the same 3M clock.
+                </li>
+                <li>
+                  <span className="text-foreground">Sharpe</span> — annualized Sharpe of the
+                  combined period returns (rf ≈ 3%).
+                </li>
+                <li>
+                  <span className="text-foreground">MDD</span> — max drawdown: worst peak-to-trough
+                  drop on compounded wealth.
+                </li>
+                <li>
+                  <span className="text-foreground">Hit vs peer</span> — share of holding windows
+                  where the combined book beat the peer.
+                </li>
+                <li>
+                  <span className="text-foreground">Options</span> — options-book return when IV
+                  history covers the window; otherwise{" "}
+                  <span className="font-mono text-foreground">uncovered</span>.
+                </li>
+              </ul>
+            </div>
+
+            <div>
+              <p className="font-display text-xs font-semibold tracking-tight text-foreground">
+                Scenarios
+              </p>
+              <ul className="mt-2 list-disc space-y-1.5 pl-5">
+                <li>
+                  <span className="font-mono text-foreground">FULL</span> — headline span after most
+                  modern ETF listings.
+                </li>
+                <li>
+                  <span className="font-mono text-foreground">COVID</span> — 2020 crash and rebound.
+                </li>
+                <li>
+                  <span className="font-mono text-foreground">BEAR_22</span> — 2022 inflation / rates
+                  bear.
+                </li>
+                <li>
+                  <span className="font-mono text-foreground">BULL_23_24</span> — narrow leadership /
+                  calmer vol regime.
+                </li>
+                <li>
+                  <span className="font-mono text-foreground">HOLD_OUT</span> — locked report card;
+                  do not tune model knobs on it after freeze.
+                </li>
+              </ul>
+            </div>
+
+            <div>
+              <p className="font-display text-xs font-semibold tracking-tight text-foreground">
+                Book construction
+              </p>
+              <ul className="mt-2 list-disc space-y-1.5 pl-5">
+                <li>
+                  When IV history covers the window, Combined is 50% ETF sleeve + 50% options book
+                  (margin reserve counted inside the options book).
+                </li>
+                <li>
+                  When a period has <strong>no usable IV overlap</strong>, we do not invent IV and
+                  we do not force cash drag — Combined assumes <strong>100% invested in the ETF
+                  sleeve</strong>, and Options is labeled{" "}
+                  <span className="font-mono text-foreground">uncovered</span>.
+                </li>
+              </ul>
+            </div>
+          </div>
           {card.generated_at ? (
             <p className="mt-4 text-xs text-muted-foreground">
               Generated {card.generated_at}

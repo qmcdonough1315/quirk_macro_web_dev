@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-11-14T00:40:21.859180+00:00",
-  "run_id": "20261114T004021Z",
+  "generated_at": "2026-11-14T00:55:42.254723+00:00",
+  "run_id": "20261114T005542Z",
   "assumptions": {
     "total_capital_usd": 100000.0,
     "etf_weight": 0.5,
@@ -14,7 +14,7 @@
     "risk_free_rate": 0.03,
     "weighting": "Target_Weight",
     "headline_peer": "VOO_JEPI_50_50",
-    "note": "Allocator view is $100k at 50/50 ETF model / options book. Paper ops may still show $25k options sleeve + $25k margin reserve; research collapses that reserve into the options book (collateral for bets). Idle options cash earns 0 in this card unless noted."
+    "note": "Allocator view is $100k at 50/50 ETF model / options book when IV history covers the window. Paper ops may still show $25k options sleeve + $25k margin reserve; research collapses that reserve into the options book (collateral for bets). When a period has no usable IV overlap, the combined book assumes 100% ETF sleeve (no invented IV, no cash drag)."
   },
   "benchmarks": {
     "VOO": {
@@ -79,25 +79,27 @@
         "max_drawdown": 0.0,
         "hit_rate_vs_benchmark": null,
         "excess_total_vs_benchmark": null,
-        "status": "ok",
+        "status": "uncovered",
         "n_trades": 0,
         "window_start": "2025-11-10",
         "window_end": "2025-12-31",
         "iv_rows": 3501,
-        "clamped": true
+        "clamped": true,
+        "note": "No usable IV overlap for this window \u2014 options PnL not simulated. Combined book assumes 100% ETF sleeve (no cash drag)."
       },
       "combined": {
         "n_periods": 27,
-        "final_value": 151177.89424578974,
-        "total_return": 0.5117789424578973,
-        "ann_vol": 0.0440698319144331,
-        "sharpe": 0.747741341604284,
-        "max_drawdown": -0.04294086619966786,
-        "hit_rate_vs_benchmark": 0.4074074074074074,
-        "excess_total_vs_benchmark": -0.7222552317882351,
-        "status": "ok",
-        "etf_weight": 0.5,
-        "options_weight": 0.5
+        "final_value": 224469.50404097242,
+        "total_return": 1.2446950404097241,
+        "ann_vol": 0.0881396638288662,
+        "sharpe": 1.0843467451435584,
+        "max_drawdown": -0.08455546964069449,
+        "hit_rate_vs_benchmark": 0.5555555555555556,
+        "excess_total_vs_benchmark": 0.010660866163591631,
+        "status": "etf_only_no_iv",
+        "etf_weight": 1.0,
+        "options_weight": 0.0,
+        "note": "100% ETF sleeve \u2014 options IV uncovered for this period."
       },
       "benchmarks": {
         "VOO": {
@@ -180,20 +182,21 @@
         "iv_end": "2026-11-11",
         "requested_start": "2020-01-31",
         "requested_end": "2020-12-31",
-        "note": "Options PnL not simulated for this window; combined assumes idle cash (0%)."
+        "note": "No usable IV overlap for this window \u2014 options PnL not simulated. Combined book assumes 100% ETF sleeve (no cash drag)."
       },
       "combined": {
         "n_periods": 3,
-        "final_value": 110131.36858517196,
-        "total_return": 0.10131368585171963,
-        "ann_vol": 0.027105207529771674,
-        "sharpe": 3.738466569493015,
+        "final_value": 120887.2492981858,
+        "total_return": 0.20887249298185795,
+        "ann_vol": 0.05421041505954335,
+        "sharpe": 4.285746775304843,
         "max_drawdown": 0.0,
-        "hit_rate_vs_benchmark": 0.3333333333333333,
-        "excess_total_vs_benchmark": -0.08282139224491769,
-        "status": "options_cash_drag",
-        "etf_weight": 0.5,
-        "options_weight": 0.5
+        "hit_rate_vs_benchmark": 0.6666666666666666,
+        "excess_total_vs_benchmark": 0.024737414885220632,
+        "status": "etf_only_no_iv",
+        "etf_weight": 1.0,
+        "options_weight": 0.0,
+        "note": "100% ETF sleeve \u2014 options IV uncovered for this period."
       },
       "benchmarks": {
         "VOO": {
@@ -276,20 +279,21 @@
         "iv_end": "2026-11-11",
         "requested_start": "2022-01-31",
         "requested_end": "2022-12-31",
-        "note": "Options PnL not simulated for this window; combined assumes idle cash (0%)."
+        "note": "No usable IV overlap for this window \u2014 options PnL not simulated. Combined book assumes 100% ETF sleeve (no cash drag)."
       },
       "combined": {
         "n_periods": 3,
-        "final_value": 100189.7348361182,
-        "total_return": 0.0018973483611819386,
-        "ann_vol": 0.05099384270249628,
-        "sharpe": -0.5153936662549462,
-        "max_drawdown": -0.01651563206022444,
+        "final_value": 100253.1832149502,
+        "total_return": 0.0025318321495020335,
+        "ann_vol": 0.10198768540499256,
+        "sharpe": -0.22449298551963107,
+        "max_drawdown": -0.03303126412044888,
         "hit_rate_vs_benchmark": 0.6666666666666666,
-        "excess_total_vs_benchmark": 0.014067238681118588,
-        "status": "options_cash_drag",
-        "etf_weight": 0.5,
-        "options_weight": 0.5
+        "excess_total_vs_benchmark": 0.014701722469438683,
+        "status": "etf_only_no_iv",
+        "etf_weight": 1.0,
+        "options_weight": 0.0,
+        "note": "100% ETF sleeve \u2014 options IV uncovered for this period."
       },
       "benchmarks": {
         "VOO": {
@@ -372,20 +376,21 @@
         "iv_end": "2026-11-11",
         "requested_start": "2023-01-31",
         "requested_end": "2024-06-30",
-        "note": "Options PnL not simulated for this window; combined assumes idle cash (0%)."
+        "note": "No usable IV overlap for this window \u2014 options PnL not simulated. Combined book assumes 100% ETF sleeve (no cash drag)."
       },
       "combined": {
         "n_periods": 5,
-        "final_value": 109094.87815077594,
-        "total_return": 0.09094878150775942,
-        "ann_vol": 0.028690322775727615,
-        "sharpe": 1.4257708331922836,
-        "max_drawdown": -0.006118900715871511,
-        "hit_rate_vs_benchmark": 0.0,
-        "excess_total_vs_benchmark": -0.16803049465431097,
-        "status": "options_cash_drag",
-        "etf_weight": 0.5,
-        "options_weight": 0.5
+        "final_value": 118747.86745427897,
+        "total_return": 0.18747867454278966,
+        "ann_vol": 0.05738064555145523,
+        "sharpe": 1.9428142861859747,
+        "max_drawdown": -0.0122378014317428,
+        "hit_rate_vs_benchmark": 0.4,
+        "excess_total_vs_benchmark": -0.07150060161928073,
+        "status": "etf_only_no_iv",
+        "etf_weight": 1.0,
+        "options_weight": 0.0,
+        "note": "100% ETF sleeve \u2014 options IV uncovered for this period."
       },
       "benchmarks": {
         "VOO": {
@@ -454,10 +459,10 @@
       },
       "options": {
         "n_periods": 9,
-        "final_value": 69933.8922842945,
-        "total_return": 0.39867784568588993,
-        "ann_vol": 0.10328384152572226,
-        "sharpe": 1.2270381351922033,
+        "final_value": 69933.89226310702,
+        "total_return": 0.39867784526214023,
+        "ann_vol": 0.10328384168821352,
+        "sharpe": 1.2270381320332469,
         "max_drawdown": 0.0,
         "hit_rate_vs_benchmark": null,
         "excess_total_vs_benchmark": null,
@@ -470,16 +475,17 @@
       },
       "combined": {
         "n_periods": 9,
-        "final_value": 151293.08112564156,
-        "total_return": 0.5129308112564155,
-        "ann_vol": 0.07106665415991785,
-        "sharpe": 2.262589045948528,
+        "final_value": 151293.08110529298,
+        "total_return": 0.5129308110529298,
+        "ann_vol": 0.07106665414693605,
+        "sharpe": 2.26258904546911,
         "max_drawdown": -0.00461648819588012,
         "hit_rate_vs_benchmark": 0.7777777777777778,
-        "excess_total_vs_benchmark": 0.23306848589526852,
+        "excess_total_vs_benchmark": 0.23306848569178285,
         "status": "ok",
         "etf_weight": 0.5,
-        "options_weight": 0.5
+        "options_weight": 0.5,
+        "note": null
       },
       "benchmarks": {
         "VOO": {
