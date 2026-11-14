@@ -11,6 +11,10 @@ import {
 } from "@/lib/alpaca.functions";
 import { WEEKLY_CONTRIBUTION_USD } from "@/lib/paper-portfolio-rules";
 import type { PortfolioHolding } from "@/lib/factor-beta";
+import {
+  TradingAdminGate,
+  useTradingAdminSession,
+} from "@/components/dashboard/TradingAdminGate";
 
 const usd = (n: number, digits = 2) =>
   n.toLocaleString("en-US", {
@@ -30,6 +34,8 @@ export function EtfDcaDesk({
   const queryClient = useQueryClient();
   const proposeFn = useServerFn(proposeAlpacaEtfDca);
   const placeFn = useServerFn(placeAlpacaEtfBuy);
+  const adminSession = useTradingAdminSession();
+  const adminUnlocked = Boolean(adminSession.data?.authenticated);
   const [buys, setBuys] = useState<EtfBuyProposalRow[]>([]);
   const [vooBuy, setVooBuy] = useState<EtfBuyProposalRow | null>(null);
   const [notes, setNotes] = useState<string[]>([]);
@@ -118,8 +124,11 @@ export function EtfDcaDesk({
       <p className="mb-5 max-w-3xl text-sm text-muted-foreground">
         Propose this week&apos;s ~{usd(WEEKLY_CONTRIBUTION_USD, 0)} factor buys from the live
         target weights, place notional market orders on Alpaca paper, and map fills into tax
-        lots. HIFO / TLH sells stay on the internal ledger path.
+        lots. HIFO / TLH sells stay on the internal ledger path. Place requires an unlocked
+        admin session.
       </p>
+
+      <TradingAdminGate />
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <button
@@ -184,7 +193,12 @@ export function EtfDcaDesk({
                   <td className="py-2.5 text-right">
                     <button
                       type="button"
-                      disabled={place.isPending}
+                      disabled={!adminUnlocked || place.isPending}
+                      title={
+                        adminUnlocked
+                          ? "Submit paper ETF buy"
+                          : "Unlock the trading desk as admin first"
+                      }
                       onClick={() => place.mutate(row)}
                       className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium hover:bg-secondary/60 disabled:opacity-50"
                     >

@@ -12,6 +12,10 @@ import {
 } from "@/lib/alpaca.functions";
 import type { AlpacaConnStatus } from "@/lib/alpaca-status";
 import { compareRankScore, rankCreditProposal } from "@/lib/options-ranker";
+import {
+  TradingAdminGate,
+  useTradingAdminSession,
+} from "@/components/dashboard/TradingAdminGate";
 
 /** Paper desk places 1 lot by default; sizing still shown on the proposal row. */
 const PLACE_QTY = 1;
@@ -39,6 +43,8 @@ export function OptionsTradeDesk({
   const boardFn = useServerFn(getLiveOptionsSignalBoard);
   const proposeFn = useServerFn(proposeAlpacaOptionsTrades);
   const placeFn = useServerFn(placeAlpacaOptionsOrder);
+  const adminSession = useTradingAdminSession();
+  const adminUnlocked = Boolean(adminSession.data?.authenticated);
   const [proposals, setProposals] = useState<TradeProposalResult[]>([]);
   const [notes, setNotes] = useState<string[]>([]);
   const [message, setMessage] = useState<string | null>(null);
@@ -136,8 +142,10 @@ export function OptionsTradeDesk({
         IV Rank plus published <span className="font-mono text-[11px]">options_composite</span>{" "}
         scores, prices them on the Alpaca chain, then places paper mleg only after you confirm.
         Missing live inputs are skipped — never filled with demo data. Place submits {PLACE_QTY}{" "}
-        contract by default.
+        contract by default and requires an unlocked admin session.
       </p>
+
+      <TradingAdminGate />
 
       <div className="mb-5 overflow-x-auto rounded-lg border border-border/70">
         <table className="w-full min-w-[720px] text-left text-sm">
@@ -305,7 +313,12 @@ export function OptionsTradeDesk({
                       <button
                         type="button"
                         className="inline-flex items-center gap-1.5 rounded-md border border-border/80 px-2.5 py-1.5 text-xs font-medium hover:bg-secondary/40 disabled:opacity-50"
-                        disabled={!live || place.isPending}
+                        disabled={!live || !adminUnlocked || place.isPending}
+                        title={
+                          adminUnlocked
+                            ? "Submit paper mleg"
+                            : "Unlock the trading desk as admin first"
+                        }
                         onClick={() => place.mutate(row)}
                       >
                         {placing ? (

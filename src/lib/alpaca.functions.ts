@@ -14,6 +14,7 @@ import {
   type PlaceEtfBuyResult,
   type PlaceOptionsOrderResult,
 } from "./alpaca.server";
+import { requireTradingAdmin } from "./trading-admin.server";
 
 export type {
   AlpacaPaperLedger,
@@ -128,6 +129,17 @@ export const placeAlpacaOptionsOrder = createServerFn({ method: "POST" })
   .validator((input: unknown) => placeSchema.parse(input))
   .handler(async ({ data }): Promise<PlaceOptionsOrderResult> => {
     try {
+      const gate = await requireTradingAdmin();
+      if (!gate.ok) {
+        return {
+          ok: false,
+          dryRun: true,
+          orderId: null,
+          status: null,
+          payload: null,
+          error: gate.error,
+        };
+      }
       return await placeOptionsPaperOrder({
         confirm: data.confirm,
         qty: data.qty,
@@ -198,6 +210,20 @@ export const placeAlpacaEtfBuy = createServerFn({ method: "POST" })
   .validator((input: unknown) => etfPlaceSchema.parse(input))
   .handler(async ({ data }): Promise<PlaceEtfBuyResult> => {
     try {
+      const gate = await requireTradingAdmin();
+      if (!gate.ok) {
+        return {
+          ok: false,
+          dryRun: true,
+          orderId: null,
+          status: null,
+          payload: null,
+          filledQty: null,
+          filledAvgPrice: null,
+          lot: null,
+          error: gate.error,
+        };
+      }
       return await placeEtfDcaBuy({
         confirm: data.confirm,
         symbol: data.symbol,
