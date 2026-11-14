@@ -6,9 +6,10 @@ import { MacroTab } from "@/components/dashboard/MacroTab";
 import { FactorBetaTab } from "@/components/dashboard/FactorBetaTab";
 import { OptionsBookTab } from "@/components/dashboard/OptionsBookTab";
 import { CashManagerTab } from "@/components/dashboard/CashManagerTab";
+import { ResearchTab } from "@/components/dashboard/ResearchTab";
 import { AboutTab } from "@/components/dashboard/AboutTab";
 
-const TABS = ["summary", "factors", "options", "cash", "macros", "about"] as const;
+const TABS = ["summary", "factors", "options", "cash", "macros", "research", "about"] as const;
 type TabId = (typeof TABS)[number];
 
 function parseTab(value: unknown): TabId {
@@ -25,13 +26,13 @@ export const Route = createFileRoute("/")({
       {
         name: "description",
         content:
-          "Paper book overview across the ETF factor model, options sleeve, cash engine, and macro regime.",
+          "Paper book overview across the ETF factor model, options sleeve, cash engine, walk-forward research, and macro regime.",
       },
       { property: "og:title", content: "Quirk Macro — Personal Financial Analytics" },
       {
         property: "og:description",
         content:
-          "Paper book overview across the ETF factor model, options sleeve, cash engine, and macro regime.",
+          "Paper book overview across the ETF factor model, options sleeve, cash engine, walk-forward research, and macro regime.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -46,6 +47,7 @@ const NAV: { id: TabId; label: string }[] = [
   { id: "options", label: "Options Book" },
   { id: "cash", label: "Cash Engine" },
   { id: "macros", label: "Macros" },
+  { id: "research", label: "Research" },
   { id: "about", label: "About" },
 ];
 
@@ -108,6 +110,8 @@ function Dashboard() {
           <CashManagerTab />
         ) : tab === "macros" ? (
           <MacroTab />
+        ) : tab === "research" ? (
+          <ResearchTab />
         ) : (
           <AboutTab />
         )}
