@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 import {
+  cancelAlpacaPaperOrder,
   emptyAlpacaLedger,
   fetchAlpacaPaperLedger,
   placeEtfDcaBuy,
@@ -9,6 +10,7 @@ import {
   proposeEtfDcaBuys,
   proposeOptionsPaperTrades,
   type AlpacaPaperLedger,
+  type CancelAlpacaOrderResult,
   type EtfDcaProposalBatch,
   type OptionsProposalBatch,
   type PlaceEtfBuyResult,
@@ -21,6 +23,7 @@ export type {
   AlpacaAccountSnapshot,
   AlpacaPosition,
   AlpacaOpenOrder,
+  CancelAlpacaOrderResult,
   OptionsFillsFeed,
   OpenSpread,
   OptionsProposalBatch,
@@ -114,16 +117,21 @@ const placeLegSchema = z.object({
   ratioQty: z.number().int().positive().max(10).optional(),
 });
 
-const placeSchema = z.object({
-  confirm: z.literal(true),
-  qty: z.number().int().positive().max(20),
-  limitPrice: z.number().max(-0.01),
-  legs: z.array(placeLegSchema).min(2).max(4),
-  structure: z
-    .enum(["bull_put_spread", "bear_call_spread", "iron_condor", "skip_low_iv"])
-    .optional(),
-  ticker: z.string().min(1).max(8).optional(),
-});
+const placeSchema = z
+  .object({
+    confirm: z.literal(true),
+    qty: z.number().int().positive().max(5),
+    limitPrice: z.number().max(-0.01),
+    legs: z.array(placeLegSchema).min(2).max(4),
+    structure: z
+      .enum(["bull_put_spread", "bear_call_spread", "iron_condor", "skip_low_iv"])
+      .optional(),
+    ticker: z.string().min(1).max(8).optional(),
+  })
+  .refine((v) => v.legs.length === 2 || v.legs.length === 4, {
+    message: "mleg orders need exactly 2 or 4 legs",
+    path: ["legs"],
+  });
 
 export const placeAlpacaOptionsOrder = createServerFn({ method: "POST" })
   .validator((input: unknown) => placeSchema.parse(input))
@@ -245,5 +253,24 @@ export const placeAlpacaEtfBuy = createServerFn({ method: "POST" })
         lot: null,
         error: message,
       };
+    }
+  });
+
+const cancelSchema = z.object({
+  orderId: z.string().min(8).max(64),
+});
+
+export const cancelAlpacaOrder = createServerFn({ method: "POST" })
+  .validator((input: unknown) => cancelSchema.parse(input))
+  .handler(async ({ data }): Promise<CancelAlpacaOrderResult> => {
+    try {
+      const gate = await requireTradingAdmin();
+      if (!gate.ok) {
+        return { ok: false, orderId: data.orderId, status: null, error: gate.error };
+      }
+      return await cancelAlpacaPaperOrder(data.orderId);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Cancel failed";
+      return { ok: false, orderId: data.orderId, status: null, error: message };
     }
   });

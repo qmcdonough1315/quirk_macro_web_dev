@@ -71,6 +71,7 @@ export interface MlegOrderPayload {
   type: "limit";
   limit_price: string;
   time_in_force: "day";
+  client_order_id?: string;
   legs: Array<{
     symbol: string;
     ratio_qty: string;
