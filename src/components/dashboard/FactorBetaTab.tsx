@@ -398,7 +398,7 @@ function OptionsMovedNote() {
         className="font-medium text-accent underline-offset-2 hover:underline"
         onClick={() => void navigate({ search: { tab: "summary" } })}
       >
-        Summary
+        Fund Summary
       </button>
       .
     </div>

@@ -13,7 +13,7 @@ const TABS = ["summary", "factors", "options", "cash", "macros", "research", "ab
 type TabId = (typeof TABS)[number];
 
 function parseTab(value: unknown): TabId {
-  return TABS.includes(value as TabId) ? (value as TabId) : "summary";
+  return TABS.includes(value as TabId) ? (value as TabId) : "macros";
 }
 
 export const Route = createFileRoute("/")({
@@ -42,7 +42,7 @@ export const Route = createFileRoute("/")({
 });
 
 const NAV: { id: TabId; label: string }[] = [
-  { id: "summary", label: "Summary" },
+  { id: "summary", label: "Fund Summary" },
   { id: "factors", label: "ETF Model" },
   { id: "options", label: "Options Book" },
   { id: "cash", label: "Cash Engine" },

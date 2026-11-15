@@ -230,7 +230,7 @@ export function ResearchTab() {
           </h3>
           <div className="mt-4 space-y-4 text-sm text-muted-foreground">
             <p>
-              Live paper since inception lives on Summary / ETF Model. This tab is the{" "}
+              Live paper since inception lives on Fund Summary / ETF Model. This tab is the{" "}
               <em>historical</em> walk-forward pack across frozen market regimes.
             </p>
 
