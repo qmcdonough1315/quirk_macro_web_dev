@@ -4,7 +4,16 @@
  * computes defined-risk buying power. No network and no ETF-book side effects.
  */
 
+import { PHASE1_OPTIONABLE_ETFS } from "./options-sleeve-rules";
+
 const CONTRACT_MULTIPLIER = 100;
+
+const STRATEGY_UNDERLYINGS = new Set<string>(PHASE1_OPTIONABLE_ETFS);
+
+/** True when the OCC root is in the Phase 1 options sleeve universe. */
+export function isStrategyOptionUnderlying(underlying: string): boolean {
+  return STRATEGY_UNDERLYINGS.has(underlying.trim().toUpperCase());
+}
 
 const UNDERLYING_BETA: Record<string, number> = {
   SPY: 1,
@@ -619,12 +628,25 @@ export function buildOptionsFeed(input: {
   } else if (input.positions.length > 0 && input.fills.length === 0) {
     notes.push("Alpaca returned no option fills for open contracts.");
   } else {
-    const settled = settleOptionFills(input.fills);
+    // Desk P&L only counts Phase 1 ETF sleeve fills. Single-name / off-book
+    // paper trades (e.g. discretionary NVDA) stay out of realized premium.
+    const strategyFills = input.fills.filter((fill) => {
+      const occ = parseOcc(fill.symbol);
+      return occ != null && isStrategyOptionUnderlying(occ.underlying);
+    });
+    const skipped = input.fills.length - strategyFills.length;
+    const settled = settleOptionFills(strategyFills);
     realizedPl = settled.realized;
+    if (skipped > 0) {
+      notes.push(
+        `Realized premium excludes ${skipped} non-strategy option fill${skipped === 1 ? "" : "s"} (outside Phase 1 ETF sleeve).`,
+      );
+    }
     const open = new Map<string, number>();
     for (const position of input.positions) {
       const symbol = position.symbol.toUpperCase();
-      if (!parseOcc(symbol)) continue;
+      const occ = parseOcc(symbol);
+      if (!occ || !isStrategyOptionUnderlying(occ.underlying)) continue;
       open.set(symbol, (open.get(symbol) ?? 0) + signedQty(position));
     }
     const symbols = new Set([...open.keys(), ...settled.openQty.keys()]);
