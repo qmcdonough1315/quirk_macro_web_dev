@@ -368,7 +368,7 @@ export function SummaryTab() {
           <Metric
             label="Realized premium"
             value={optionCell(feed?.realizedPl, (n) => usd(n, 2))}
-            note="Closed option fills"
+            note="Phase 1 ETF sleeve closes"
             tone={pnlTone(feed?.realizedPl)}
           />
           <Metric

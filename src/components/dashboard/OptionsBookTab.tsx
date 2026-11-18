@@ -145,7 +145,9 @@ export function OptionsBookTab() {
             >
               {cell(feed?.realizedPl, 2)}
             </p>
-            <p className="mt-1 text-xs text-muted-foreground">FIFO from option fills</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              FIFO · Phase 1 ETF sleeve fills only
+            </p>
           </div>
           <div className="rounded-lg border border-border/70 bg-secondary/20 p-4">
             <p className="label-caps">β-weighted Δ</p>

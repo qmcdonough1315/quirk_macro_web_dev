@@ -244,6 +244,33 @@ assert.ok(separate.spreads.some((spread) => spread.structure === "Long put"));
 
 assert.equal(buildOptionsFeed({ positions: bullPut, fills: null }).realizedPl, null);
 
+// Non-strategy single-name closes must not drag sleeve realized premium.
+const offBook: OptionFillInput[] = [
+  {
+    id: "nvda-open",
+    symbol: "NVDA261120C00155000",
+    side: "buy",
+    qty: 100,
+    price: 6.75,
+    transactionTime: "2026-11-17T18:51:01Z",
+  },
+  {
+    id: "nvda-close",
+    symbol: "NVDA261120C00155000",
+    side: "sell",
+    qty: 100,
+    price: 3.6,
+    transactionTime: "2026-11-18T14:57:21Z",
+  },
+  ...closed,
+];
+const reset = buildOptionsFeed({ positions: [], fills: offBook });
+near(reset.realizedPl ?? NaN, 100, "strategy premium only");
+assert.ok(
+  reset.notes.some((note) => note.includes("non-strategy option fill")),
+  "notes skipped off-book fills",
+);
+
 const unknown = cashPartitions({ etfFloatRemaining: 1000, optionsBpUsed: null });
 assert.equal(unknown.optionsBpUsedUsd, null);
 assert.equal(unknown.freeCollateralUsd, null);
