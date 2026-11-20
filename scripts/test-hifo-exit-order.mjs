@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 
 const root = dirname(fileURLToPath(import.meta.url));
 const { compareLotsLeastGainFirst, MIN_HOLD_DAYS, LONG_TERM_DAYS, WEIGHT_EPS } = await import(
-  pathToFileURL(join(root, "../src/lib/paper-portfolio-rules.ts")).href,
+  pathToFileURL(join(root, "../src/lib/paper-portfolio-rules.ts")).href
 );
 
 function diffDays(a, b) {

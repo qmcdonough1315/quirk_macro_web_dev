@@ -436,8 +436,8 @@ export function SummaryTab() {
           <li>
             Options cells stay &quot;Not live&quot; until Alpaca secrets are set on Vercel
             Production (then redeploy), or when keys return 401, or when an unpaired short leaves
-            buying power and max loss undefined. A live book with no option positions is flat:
-            those cells are $0, not a missing feed. Buying power used is defined-risk margin
+            buying power and max loss undefined. A live book with no option positions is flat: those
+            cells are $0, not a missing feed. Buying power used is defined-risk margin
             (credit-spread max loss). β-weighted delta needs a greek on every open leg.
           </li>
           <li>

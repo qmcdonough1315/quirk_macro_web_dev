@@ -11,11 +11,7 @@
  */
 import { createHash, timingSafeEqual } from "node:crypto";
 
-import {
-  getRequestIP,
-  useSession,
-  type SessionConfig,
-} from "@tanstack/react-start/server";
+import { getRequestIP, useSession, type SessionConfig } from "@tanstack/react-start/server";
 
 export type TradingAdminSessionData = {
   role?: "admin";
@@ -23,8 +19,7 @@ export type TradingAdminSessionData = {
 };
 
 export type TradingAdminGateResult =
-  | { ok: true }
-  | { ok: false; error: string; code: "not_configured" | "unauthorized" };
+  { ok: true } | { ok: false; error: string; code: "not_configured" | "unauthorized" };
 
 const SESSION_NAME = "qm_trading_admin";
 const SESSION_MAX_AGE_SEC = 60 * 60 * 8; // 8 hours

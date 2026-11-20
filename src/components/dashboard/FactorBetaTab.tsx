@@ -442,10 +442,10 @@ function PaperPortfolioPanels({
           Catch-up replay starts with the {paper?.inceptionDate ?? STRATEGY_INCEPTION_DATE} model
           run and continues through every later weekly run. Each run allocates ~$
           {WEEKLY_CONTRIBUTION_USD.toLocaleString(undefined, { maximumFractionDigits: 0 })} (1/13 of
-          the $50k ETF target) at the next session open using that week&apos;s target weights.
-          Lots clear the ~3-month hold on a ladder so one vintage becomes eligible each week after
-          week 13. Tax-lot sells prefer highest cost basis / least gain first and hold short-term
-          winners for long-term treatment when possible. Undeployed ETF capital (
+          the $50k ETF target) at the next session open using that week&apos;s target weights. Lots
+          clear the ~3-month hold on a ladder so one vintage becomes eligible each week after week
+          13. Tax-lot sells prefer highest cost basis / least gain first and hold short-term winners
+          for long-term treatment when possible. Undeployed ETF capital (
           {usd(paper?.etfFloatRemaining ?? 50_000)}) parks as float until its DCA week. Dividends
           are reinvested on the ex-date. VOO and asset-mix benchmark sleeves invest the same weekly
           cash (mix: VOO, IJH, IJR, VEA, BND, TLT, PDBC at category weights).
@@ -810,10 +810,7 @@ export function FactorBetaTab() {
 
       <PaperPortfolioPanels paper={paper} isPending={paperPending} />
 
-      <EtfDcaDesk
-        holdings={current?.portfolio ?? []}
-        runDate={current?.as_of_date ?? null}
-      />
+      <EtfDcaDesk holdings={current?.portfolio ?? []} runDate={current?.as_of_date ?? null} />
 
       <OptionsMovedNote />
 

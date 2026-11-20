@@ -23,13 +23,27 @@ import {
 import { getMacroSnapshot, getRatesOutlook } from "@/lib/market.functions";
 import { WeeklyDigest } from "@/components/dashboard/WeeklyDigest";
 
-function CurveTooltip({ active, payload, label }: any) {
+type CurveTooltipProps = {
+  active?: boolean;
+  label?: string;
+  payload?: Array<{
+    dataKey?: string | number;
+    name?: string;
+    value?: number | string;
+    stroke?: string;
+  }>;
+};
+
+function CurveTooltip({ active, payload, label }: CurveTooltipProps) {
   if (!active || !payload?.length) return null;
   return (
     <div className="panel px-3 py-2">
       <p className="label-caps mb-1.5">{label} tenor</p>
-      {payload.map((entry: any) => (
-        <p key={entry.dataKey} className="flex items-center gap-2 font-mono text-xs tabular-nums">
+      {payload.map((entry) => (
+        <p
+          key={String(entry.dataKey)}
+          className="flex items-center gap-2 font-mono text-xs tabular-nums"
+        >
           <span className="size-2 rounded-full" style={{ backgroundColor: entry.stroke }} />
           <span className="text-muted-foreground">{entry.name}</span>
           <span className="ml-auto text-foreground">
@@ -122,37 +136,37 @@ export function MacroTab() {
 
       {/* Top ticker */}
       {isPending || ticker.length ? (
-      <section className="panel flex flex-wrap divide-x divide-border/70">
-        {isPending
-          ? Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="min-w-[170px] flex-1 px-5 py-4">
-                <div className="h-3 w-20 animate-pulse rounded bg-secondary" />
-                <div className="mt-2.5 h-5 w-16 animate-pulse rounded bg-secondary" />
-              </div>
-            ))
-          : ticker.map((t) => {
-              const good = t.up === t.upIsGood;
-              const Icon = t.up ? ArrowUpRight : ArrowDownRight;
-              return (
-                <div key={t.label} className="min-w-[170px] flex-1 px-5 py-4">
-                  <p className="label-caps">{t.label}</p>
-                  <div className="mt-1.5 flex items-baseline gap-2">
-                    <span className="font-display text-lg font-semibold tabular-nums tracking-tight">
-                      {t.value}
-                    </span>
-                    <span
-                      className={`flex items-center gap-0.5 font-mono text-[11px] tabular-nums ${
-                        good ? "text-positive" : "text-negative"
-                      }`}
-                    >
-                      <Icon className="size-3" />
-                      {t.change}
-                    </span>
-                  </div>
+        <section className="panel flex flex-wrap divide-x divide-border/70">
+          {isPending
+            ? Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="min-w-[170px] flex-1 px-5 py-4">
+                  <div className="h-3 w-20 animate-pulse rounded bg-secondary" />
+                  <div className="mt-2.5 h-5 w-16 animate-pulse rounded bg-secondary" />
                 </div>
-              );
-            })}
-      </section>
+              ))
+            : ticker.map((t) => {
+                const good = t.up === t.upIsGood;
+                const Icon = t.up ? ArrowUpRight : ArrowDownRight;
+                return (
+                  <div key={t.label} className="min-w-[170px] flex-1 px-5 py-4">
+                    <p className="label-caps">{t.label}</p>
+                    <div className="mt-1.5 flex items-baseline gap-2">
+                      <span className="font-display text-lg font-semibold tabular-nums tracking-tight">
+                        {t.value}
+                      </span>
+                      <span
+                        className={`flex items-center gap-0.5 font-mono text-[11px] tabular-nums ${
+                          good ? "text-positive" : "text-negative"
+                        }`}
+                      >
+                        <Icon className="size-3" />
+                        {t.change}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+        </section>
       ) : null}
 
       {data?.series.length ? (
@@ -298,13 +312,13 @@ export function MacroTab() {
         <div className="panel p-6">
           <div className="mb-1 flex items-center gap-2.5">
             <Percent className="size-4 text-accent" />
-            <h3 className="font-display text-base font-semibold tracking-tight">
-              Fed Funds Path
-            </h3>
+            <h3 className="font-display text-base font-semibold tracking-tight">Fed Funds Path</h3>
           </div>
           <p className="text-xs text-muted-foreground">
             Bill-implied gap between effective fed funds and the 3-month Treasury
-            {rates.data?.nextMeeting ? `, next listed FOMC date ${fmtDay(rates.data.nextMeeting)}` : ""}
+            {rates.data?.nextMeeting
+              ? `, next listed FOMC date ${fmtDay(rates.data.nextMeeting)}`
+              : ""}
             . Not the Atlanta Fed probability tracker.
           </p>
 

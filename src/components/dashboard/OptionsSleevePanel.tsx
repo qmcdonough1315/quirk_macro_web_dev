@@ -125,9 +125,7 @@ export function OptionsSleevePanel() {
                   <td className="px-3 py-2.5 text-right font-mono tabular-nums">
                     {row.ivRank == null ? "—" : `${row.ivRank.toFixed(1)}%`}
                   </td>
-                  <td className="px-3 py-2.5 font-mono text-xs">
-                    {row.signal?.structure ?? "—"}
-                  </td>
+                  <td className="px-3 py-2.5 font-mono text-xs">{row.signal?.structure ?? "—"}</td>
                   <td className="px-3 py-2.5 text-xs text-muted-foreground">
                     {row.signal?.rationale ?? row.skipReason ?? "—"}
                   </td>

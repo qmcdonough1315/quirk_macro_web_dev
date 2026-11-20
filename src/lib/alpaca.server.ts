@@ -327,7 +327,9 @@ async function fetchOpenOrders(): Promise<{
   orders: AlpacaOpenOrder[];
   note: string | null;
 }> {
-  const res = await alpacaGet<Record<string, unknown>[]>("/orders?status=open&nested=true&limit=50");
+  const res = await alpacaGet<Record<string, unknown>[]>(
+    "/orders?status=open&nested=true&limit=50",
+  );
   if (!res.ok) return { orders: [], note: res.error };
   if (!Array.isArray(res.data)) return { orders: [], note: "Alpaca open orders was not a list." };
   return { orders: res.data.map(mapOpenOrder), note: null };
@@ -509,10 +511,11 @@ function readQuoteSide(snap: unknown, key: "bid" | "ask"): number | null {
   return Number.isFinite(value) && value > 0 ? value : null;
 }
 
-async function fetchOptionSnapshots(
-  symbols: string[],
-): Promise<{
-  bySymbol: Map<string, { bid: number | null; ask: number | null; mid: number | null; delta: number | null }>;
+async function fetchOptionSnapshots(symbols: string[]): Promise<{
+  bySymbol: Map<
+    string,
+    { bid: number | null; ask: number | null; mid: number | null; delta: number | null }
+  >;
   note: string | null;
 }> {
   const bySymbol = new Map<
@@ -541,7 +544,7 @@ async function fetchOptionSnapshots(
     for (const [symbol, snap] of Object.entries(snaps as Record<string, unknown>)) {
       const bid = readQuoteSide(snap, "bid");
       const ask = readQuoteSide(snap, "ask");
-      const mid = bid != null && ask != null ? (bid + ask) / 2 : bid ?? ask;
+      const mid = bid != null && ask != null ? (bid + ask) / 2 : (bid ?? ask);
       bySymbol.set(symbol.toUpperCase(), {
         bid,
         ask,
@@ -563,7 +566,9 @@ export async function fetchOptionContractsForUnderlying(
     spot?: number;
     enrichQuotes?: boolean;
   },
-): Promise<{ ok: true; contracts: OptionContractQuote[]; note: string | null } | { ok: false; error: string }> {
+): Promise<
+  { ok: true; contracts: OptionContractQuote[]; note: string | null } | { ok: false; error: string }
+> {
   const dteMin = opts?.dteMin ?? OPTIONS_DTE_MIN;
   const dteMax = opts?.dteMax ?? OPTIONS_DTE_MAX;
   const enrichQuotes = opts?.enrichQuotes !== false;
@@ -580,7 +585,11 @@ export async function fetchOptionContractsForUnderlying(
   const rows = Array.isArray(rawList) ? (rawList as Record<string, unknown>[]) : [];
   let contracts = rows.map(mapContract).filter((c): c is OptionContractQuote => c != null);
   if (!contracts.length) {
-    return { ok: true, contracts: [], note: `No active contracts for ${underlying.toUpperCase()}.` };
+    return {
+      ok: true,
+      contracts: [],
+      note: `No active contracts for ${underlying.toUpperCase()}.`,
+    };
   }
 
   if (opts?.spot != null && opts.spot > 0) {
@@ -624,8 +633,7 @@ export async function fetchUnderlyingLastPrice(
   const trade =
     (res.data["trade"] as Record<string, unknown> | undefined) ??
     ((res.data["trades"] as Record<string, unknown> | undefined)?.[upper] as
-      | Record<string, unknown>
-      | undefined);
+      Record<string, unknown> | undefined);
   const price = num(trade?.["p"] ?? trade?.["price"]);
   if (!(price > 0)) return { ok: false, error: `No last trade for ${upper}.` };
   return { ok: true, price };

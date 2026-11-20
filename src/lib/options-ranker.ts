@@ -21,10 +21,7 @@ function mean(values: number[]): number | null {
   return values.reduce((a, b) => a + b, 0) / values.length;
 }
 
-export function rankCreditProposal(
-  proposal: TradeProposal,
-  ivRank: number,
-): RankMetrics {
+export function rankCreditProposal(proposal: TradeProposal, ivRank: number): RankMetrics {
   const notes: string[] = [];
   const shortDeltas = proposal.legs
     .filter((l) => l.side === "sell" && l.delta != null && Number.isFinite(l.delta))
@@ -33,8 +30,7 @@ export function rankCreditProposal(
   const popProxy = shortAbsDelta == null ? null : Math.max(0, Math.min(1, 1 - shortAbsDelta));
   if (popProxy == null) notes.push("POP proxy unavailable (missing short Δ).");
 
-  const creditToWidth =
-    proposal.width > 0 ? proposal.creditPerShare / proposal.width : null;
+  const creditToWidth = proposal.width > 0 ? proposal.creditPerShare / proposal.width : null;
   if (creditToWidth == null) notes.push("Credit/width unavailable.");
 
   const spreads: number[] = [];
@@ -46,7 +42,7 @@ export function rankCreditProposal(
 
   let score = 0;
   if (popProxy != null) score += popProxy * 40;
-  if (creditToWidth != null) score += Math.min(creditToWidth, 0.5) / 0.5 * 30;
+  if (creditToWidth != null) score += (Math.min(creditToWidth, 0.5) / 0.5) * 30;
   // IVR: prefer elevated; 0 below preferred floor contribution, scale to 100.
   const ivTerm =
     ivRank >= OPTIONS_IVR_PREFERRED

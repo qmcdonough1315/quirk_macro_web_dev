@@ -34,16 +34,10 @@ export const PHASE1_OPTIONABLE_ETFS = [
 ] as const;
 
 export type OptionsStructure =
-  | "bull_put_spread"
-  | "bear_call_spread"
-  | "iron_condor"
-  | "skip_low_iv";
+  "bull_put_spread" | "bear_call_spread" | "iron_condor" | "skip_low_iv";
 
 export type OptionsRegime =
-  | "q1_bullish_vol_seller"
-  | "q2_bearish_vol_seller"
-  | "q3_neutral_vol"
-  | "q4_low_iv";
+  "q1_bullish_vol_seller" | "q2_bearish_vol_seller" | "q3_neutral_vol" | "q4_low_iv";
 
 export interface OptionsSignal {
   ticker: string;
