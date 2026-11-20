@@ -71,10 +71,7 @@ const withId = etf.buildEquityBuyPayload("SPY", 100, { clientOrderId: id1 });
 assert.equal(withId.client_order_id, id1);
 
 // Duplicate handling mirrors options mleg: recognize Alpaca conflict strings
-assert.equal(
-  etf.isDuplicateClientOrderIdError("client_order_id already exists"),
-  true,
-);
+assert.equal(etf.isDuplicateClientOrderIdError("client_order_id already exists"), true);
 assert.equal(etf.isDuplicateClientOrderIdError("duplicate order"), true);
 assert.equal(etf.isDuplicateClientOrderIdError("insufficient buying power"), false);
 
