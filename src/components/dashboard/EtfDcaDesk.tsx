@@ -39,6 +39,10 @@ export function EtfDcaDesk({
   const [message, setMessage] = useState<string | null>(null);
   const [lots, setLots] = useState<PaperLotFromFill[]>([]);
   const [includeVoo, setIncludeVoo] = useState(false);
+  /** Keys `${reason}-${ticker}` marked after a successful place (incl. idempotent). */
+  const [placedKeys, setPlacedKeys] = useState<Set<string>>(() => new Set());
+  const placeRunDate = runDate?.trim().slice(0, 10) || new Date().toISOString().slice(0, 10);
+  const rowKey = (row: EtfBuyProposalRow) => `${row.reason}-${row.ticker}`;
 
   const weights = useMemo(() => {
     const out: Record<string, number> = {};
@@ -60,6 +64,7 @@ export function EtfDcaDesk({
     onSuccess: (batch) => {
       setBuys(batch.proposal?.buys ?? []);
       setVooBuy(batch.proposal?.vooBuy ?? null);
+      setPlacedKeys(new Set());
       setNotes(batch.notes);
       setMessage(
         batch.live
@@ -70,6 +75,7 @@ export function EtfDcaDesk({
     onError: (err) => {
       setBuys([]);
       setVooBuy(null);
+      setPlacedKeys(new Set());
       setNotes([]);
       setMessage(err instanceof Error ? err.message : "Propose failed");
     },
@@ -82,13 +88,14 @@ export function EtfDcaDesk({
           confirm: true as const,
           symbol: row.ticker,
           notional: row.notional,
+          runDate: placeRunDate,
           reason: row.reason,
           strategy: row.reason === "weekly_voo_dca" ? "voo" : "factor",
-          ...(runDate ? { runDate } : {}),
         },
       }),
     onSuccess: async (result, row) => {
       if (result.ok) {
+        setPlacedKeys((prev) => new Set(prev).add(rowKey(row)));
         if (result.lot) setLots((prev) => [result.lot!, ...prev]);
         setMessage(
           `Placed ${row.ticker} ${usd(row.notional)} · order ${result.orderId ?? "?"} (${result.status ?? "submitted"})` +
@@ -174,41 +181,46 @@ export function EtfDcaDesk({
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => (
-                <tr
-                  key={`${row.reason}-${row.ticker}`}
-                  className="border-b border-border/50 last:border-0"
-                >
-                  <td className="py-2.5 pr-4 font-mono font-medium">{row.ticker}</td>
-                  <td className="py-2.5 pr-4 text-right font-mono tabular-nums">
-                    {(row.weight * 100).toFixed(1)}%
-                  </td>
-                  <td className="py-2.5 pr-4 text-right font-mono tabular-nums">
-                    {usd(row.notional)}
-                  </td>
-                  <td className="py-2.5 pr-4 text-xs text-muted-foreground">{row.reason}</td>
-                  <td className="py-2.5 text-right">
-                    <button
-                      type="button"
-                      disabled={!adminUnlocked || place.isPending}
-                      title={
-                        adminUnlocked
-                          ? "Submit paper ETF buy"
-                          : "Unlock the trading desk as admin first"
-                      }
-                      onClick={() => place.mutate(row)}
-                      className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium hover:bg-secondary/60 disabled:opacity-50"
-                    >
-                      {place.isPending ? (
-                        <Loader2 className="size-3 animate-spin" />
-                      ) : (
-                        <Send className="size-3" />
-                      )}
-                      Place
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {rows.map((row) => {
+                const key = rowKey(row);
+                const alreadyPlaced = placedKeys.has(key);
+                const placingThis =
+                  place.isPending && place.variables != null && rowKey(place.variables) === key;
+                return (
+                  <tr key={key} className="border-b border-border/50 last:border-0">
+                    <td className="py-2.5 pr-4 font-mono font-medium">{row.ticker}</td>
+                    <td className="py-2.5 pr-4 text-right font-mono tabular-nums">
+                      {(row.weight * 100).toFixed(1)}%
+                    </td>
+                    <td className="py-2.5 pr-4 text-right font-mono tabular-nums">
+                      {usd(row.notional)}
+                    </td>
+                    <td className="py-2.5 pr-4 text-xs text-muted-foreground">{row.reason}</td>
+                    <td className="py-2.5 text-right">
+                      <button
+                        type="button"
+                        disabled={!adminUnlocked || place.isPending || alreadyPlaced}
+                        title={
+                          alreadyPlaced
+                            ? "Already placed for this proposal"
+                            : adminUnlocked
+                              ? "Submit paper ETF buy"
+                              : "Unlock the trading desk as admin first"
+                        }
+                        onClick={() => place.mutate(row)}
+                        className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium hover:bg-secondary/60 disabled:opacity-50"
+                      >
+                        {placingThis ? (
+                          <Loader2 className="size-3 animate-spin" />
+                        ) : (
+                          <Send className="size-3" />
+                        )}
+                        {alreadyPlaced ? "Placed" : "Place"}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

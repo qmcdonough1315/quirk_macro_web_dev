@@ -16,6 +16,8 @@ import {
   type OptionsFillsFeed,
 } from "./options-fills";
 import {
+  buildEtfClientOrderId,
+  isDuplicateClientOrderIdError,
   lotFromAlpacaFill,
   proposeWeeklyEtfBuys,
   type EquityBuyPayload,
@@ -970,9 +972,10 @@ export interface PlaceEtfBuyRequest {
   confirm: boolean;
   symbol: string;
   notional: number;
+  /** Required for deterministic client_order_id (YYYY-MM-DD). */
+  runDate: string;
   reason?: "weekly_dca" | "weekly_voo_dca";
   strategy?: "factor" | "voo";
-  runDate?: string;
 }
 
 export interface PlaceEtfBuyResult {
@@ -1011,6 +1014,12 @@ export async function placeEtfDcaBuy(req: PlaceEtfBuyRequest): Promise<PlaceEtfB
   }
   const symbol = req.symbol.trim().toUpperCase();
   if (!symbol) return empty("symbol required");
+  const runDate = req.runDate?.trim().slice(0, 10) ?? "";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(runDate)) {
+    return empty("runDate required (YYYY-MM-DD) for idempotent ETF DCA place.");
+  }
+  const strategy = req.strategy ?? (req.reason === "weekly_voo_dca" ? "voo" : "factor");
+  const clientOrderId = buildEtfClientOrderId({ strategy, runDate, symbol });
 
   const payload: EquityBuyPayload = {
     symbol,
@@ -1018,10 +1027,51 @@ export async function placeEtfDcaBuy(req: PlaceEtfBuyRequest): Promise<PlaceEtfB
     side: "buy",
     type: "market",
     time_in_force: "day",
+    client_order_id: clientOrderId,
+  };
+
+  const finishFromOrder = (data: Record<string, unknown>): PlaceEtfBuyResult => {
+    const orderId = str(data["id"]) || null;
+    const status = str(data["status"]) || null;
+    const filledQty = num(data["filled_qty"]);
+    const filledAvgPrice = num(data["filled_avg_price"]);
+    let lot: PaperLotFromFill | null = null;
+    if (filledQty > 0 && filledAvgPrice > 0) {
+      lot = lotFromAlpacaFill({
+        ticker: symbol,
+        shares: filledQty,
+        price: filledAvgPrice,
+        filledAt: str(data["filled_at"]) || null,
+        orderId,
+        strategy,
+        reason: req.reason ?? "weekly_dca",
+        runDate,
+      });
+    }
+    return {
+      ok: true,
+      dryRun: false,
+      orderId,
+      status,
+      payload,
+      filledQty: filledQty > 0 ? filledQty : null,
+      filledAvgPrice: filledAvgPrice > 0 ? filledAvgPrice : null,
+      lot,
+      error: null,
+    };
   };
 
   const res = await alpacaPost<Record<string, unknown>>("/orders", payload);
   if (!res.ok) {
+    // Duplicate client_order_id → treat as idempotent success if we can resolve the order.
+    if (isDuplicateClientOrderIdError(res.error)) {
+      const existing = await alpacaGet<Record<string, unknown>>(
+        `/orders:by_client_order_id?client_order_id=${encodeURIComponent(clientOrderId)}`,
+      );
+      if (existing.ok) {
+        return finishFromOrder(existing.data);
+      }
+    }
     return {
       ok: false,
       dryRun: false,
@@ -1035,33 +1085,5 @@ export async function placeEtfDcaBuy(req: PlaceEtfBuyRequest): Promise<PlaceEtfB
     };
   }
 
-  const orderId = str(res.data["id"]) || null;
-  const status = str(res.data["status"]) || null;
-  const filledQty = num(res.data["filled_qty"]);
-  const filledAvgPrice = num(res.data["filled_avg_price"]);
-  let lot: PaperLotFromFill | null = null;
-  if (filledQty > 0 && filledAvgPrice > 0) {
-    lot = lotFromAlpacaFill({
-      ticker: symbol,
-      shares: filledQty,
-      price: filledAvgPrice,
-      filledAt: str(res.data["filled_at"]) || null,
-      orderId,
-      strategy: req.strategy ?? (req.reason === "weekly_voo_dca" ? "voo" : "factor"),
-      reason: req.reason ?? "weekly_dca",
-      runDate: req.runDate ?? null,
-    });
-  }
-
-  return {
-    ok: true,
-    dryRun: false,
-    orderId,
-    status,
-    payload,
-    filledQty: filledQty > 0 ? filledQty : null,
-    filledAvgPrice: filledAvgPrice > 0 ? filledAvgPrice : null,
-    lot,
-    error: null,
-  };
+  return finishFromOrder(res.data);
 }

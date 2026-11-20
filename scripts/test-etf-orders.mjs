@@ -45,6 +45,36 @@ assert.equal(lot.openedOn, "2026-11-12");
 assert.equal(lot.source, "alpaca_fill");
 assert.equal(lot.status, "open");
 
+// Idempotent client_order_id: stable format under Alpaca's 48-char cap
+const id1 = etf.buildEtfClientOrderId({
+  strategy: "factor",
+  runDate: "2026-11-19",
+  symbol: "spy",
+});
+const id2 = etf.buildEtfClientOrderId({
+  strategy: "factor",
+  runDate: "2026-11-19T15:00:00Z",
+  symbol: "SPY",
+});
+const id3 = etf.buildEtfClientOrderId({
+  strategy: "voo",
+  runDate: "2026-11-19",
+  symbol: "VOO",
+});
+assert.equal(id1, "etf-factor-2026-11-19-SPY");
+assert.equal(id1, id2, "client_order_id stable across symbol/runDate normalization");
+assert.equal(id3, "etf-voo-2026-11-19-VOO");
+assert.notEqual(id1, id3, "client_order_id changes with strategy/symbol");
+assert.ok(id1.length <= etf.ETF_CLIENT_ORDER_ID_MAX, "client_order_id length ok");
+
+const withId = etf.buildEquityBuyPayload("SPY", 100, { clientOrderId: id1 });
+assert.equal(withId.client_order_id, id1);
+
+// Duplicate handling mirrors options mleg: recognize Alpaca conflict strings
+assert.equal(etf.isDuplicateClientOrderIdError("client_order_id already exists"), true);
+assert.equal(etf.isDuplicateClientOrderIdError("duplicate order"), true);
+assert.equal(etf.isDuplicateClientOrderIdError("insufficient buying power"), false);
+
 // HIFO path unchanged — still sorts high basis first
 const low = { costPerShare: 100, shares: 10, openedOn: "2026-09-21" };
 const high = { costPerShare: 200, shares: 10, openedOn: "2026-12-07" };
