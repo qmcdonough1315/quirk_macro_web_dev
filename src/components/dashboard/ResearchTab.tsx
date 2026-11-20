@@ -18,7 +18,7 @@ function Metric({
 }: {
   label: string;
   value: string;
-  note?: string;
+  note?: string | undefined;
   tone?: "positive" | "negative" | "muted";
 }) {
   const valueClass =
