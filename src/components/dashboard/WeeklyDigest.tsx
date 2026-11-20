@@ -92,7 +92,9 @@ export function WeeklyDigest() {
 
   return (
     <div>
-      <p className="font-display text-lg font-semibold leading-snug tracking-tight">{digest.title}</p>
+      <p className="font-display text-lg font-semibold leading-snug tracking-tight">
+        {digest.title}
+      </p>
       <time
         dateTime={digest.date}
         className="mt-1.5 block font-mono text-xs tabular-nums text-muted-foreground"

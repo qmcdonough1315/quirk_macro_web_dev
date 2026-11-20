@@ -23,8 +23,6 @@ export const loginTradingAdminDesk = createServerFn({ method: "POST" })
     return loginTradingAdmin(data.password);
   });
 
-export const logoutTradingAdminDesk = createServerFn({ method: "POST" }).handler(
-  async () => {
-    return logoutTradingAdmin();
-  },
-);
+export const logoutTradingAdminDesk = createServerFn({ method: "POST" }).handler(async () => {
+  return logoutTradingAdmin();
+});

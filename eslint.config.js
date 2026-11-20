@@ -37,4 +37,11 @@ export default tseslint.config(
     },
   },
   eslintPluginPrettier,
+  // TanStack Start server helpers (e.g. useSession) are not React component hooks.
+  {
+    files: ["**/*.server.ts"],
+    rules: {
+      "react-hooks/rules-of-hooks": "off",
+    },
+  },
 );

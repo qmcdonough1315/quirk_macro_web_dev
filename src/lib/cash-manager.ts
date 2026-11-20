@@ -39,7 +39,6 @@ export interface CashEngineData {
 const FALLBACK_URL = (ticker: string) =>
   `https://www.google.com/search?q=${encodeURIComponent(ticker + " fund")}`;
 
-
 /** Lowercase + strip everything non-alphanumeric for forgiving key matching. */
 const normKey = (k: string) => k.toLowerCase().replace(/[^a-z0-9]/g, "");
 
@@ -76,8 +75,7 @@ const DATE_KEYS = [
 ];
 
 /** Newest snapshot stamp as YYYY-MM-DD; ISO timestamps are truncated to the date. */
-const getDate = (row: Record<string, unknown>) =>
-  String(lookup(row, DATE_KEYS) ?? "").slice(0, 10);
+const getDate = (row: Record<string, unknown>) => String(lookup(row, DATE_KEYS) ?? "").slice(0, 10);
 
 function coerceFund(row: Record<string, unknown>): CashFund {
   const ticker = String(lookup(row, ["ticker", "symbol", "fund_ticker"]) ?? "").toUpperCase();
@@ -110,13 +108,7 @@ function coerceFund(row: Record<string, unknown>): CashFund {
 function coerceSummary(row: Record<string, unknown>): CashSummary {
   return {
     avg_yield: toPct(
-      lookup(row, [
-        "avg_yield",
-        "average_yield",
-        "avgyield",
-        "avg_sec_yield",
-        "average_sec_yield",
-      ]),
+      lookup(row, ["avg_yield", "average_yield", "avgyield", "avg_sec_yield", "average_sec_yield"]),
     ),
     avg_expense_ratio: toPct(
       lookup(row, [
@@ -172,8 +164,10 @@ export async function fetchCashManagerYields(): Promise<CashEngineData> {
     const summary = summaryRows.length ? coerceSummary(summaryRows[0]!) : null;
 
     const asOf =
-      funds.map((f) => f.as_of_date).sort().at(-1) ||
-      (summaryRows.length ? getDate(summaryRows[0]!) : null);
+      funds
+        .map((f) => f.as_of_date)
+        .sort()
+        .at(-1) || (summaryRows.length ? getDate(summaryRows[0]!) : null);
 
     return { funds, summary, live: true, asOf: asOf || null };
   } catch {

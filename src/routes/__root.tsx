@@ -79,13 +79,25 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "Quirk Macro — Macro & Personal Finance Dashboard" },
-      { name: "description", content: "Personal financial analytics. Institutional-grade dashboard tracking macroeconomic data, housing market trends, market factors, and cash management." },
+      {
+        name: "description",
+        content:
+          "Personal financial analytics. Institutional-grade dashboard tracking macroeconomic data, housing market trends, market factors, and cash management.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
       { property: "og:title", content: "Quirk Macro — Macro & Personal Finance Dashboard" },
       { name: "twitter:title", content: "Quirk Macro — Macro & Personal Finance Dashboard" },
-      { property: "og:description", content: "Personal financial analytics. Institutional-grade dashboard tracking macroeconomic data, housing market trends, market factors, and cash management." },
-      { name: "twitter:description", content: "Personal financial analytics. Institutional-grade dashboard tracking macroeconomic data, housing market trends, market factors, and cash management." },
+      {
+        property: "og:description",
+        content:
+          "Personal financial analytics. Institutional-grade dashboard tracking macroeconomic data, housing market trends, market factors, and cash management.",
+      },
+      {
+        name: "twitter:description",
+        content:
+          "Personal financial analytics. Institutional-grade dashboard tracking macroeconomic data, housing market trends, market factors, and cash management.",
+      },
     ],
     links: [
       {

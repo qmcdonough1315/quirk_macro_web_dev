@@ -48,7 +48,6 @@ export function AboutTab() {
           </ul>
         </div>
 
-
         <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
           <div className="mb-5 flex items-center gap-3">
             <span className="flex size-10 items-center justify-center rounded-lg bg-accent/12 ring-1 ring-accent/30">
@@ -94,7 +93,6 @@ export function AboutTab() {
           ))}
         </ol>
       </section>
-
 
       <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
         <h3 className="mb-4 font-display text-lg font-semibold tracking-tight">Get in Touch</h3>

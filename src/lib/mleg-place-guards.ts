@@ -132,7 +132,12 @@ export function assertDefinedRiskMleg(legs: PlaceLegInput[]): GuardResult {
   const putBuys = buys.filter((l) => l.parsed.right === "P");
   const callSells = sells.filter((l) => l.parsed.right === "C");
   const callBuys = buys.filter((l) => l.parsed.right === "C");
-  if (putSells.length !== 1 || putBuys.length !== 1 || callSells.length !== 1 || callBuys.length !== 1) {
+  if (
+    putSells.length !== 1 ||
+    putBuys.length !== 1 ||
+    callSells.length !== 1 ||
+    callBuys.length !== 1
+  ) {
     return fail("Iron condor needs one short/long put and one short/long call.");
   }
   const putGeom = assertVerticalGeometry(putSells[0]!, putBuys[0]!, "IC put vertical");

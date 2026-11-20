@@ -11,10 +11,7 @@ import {
 } from "@/lib/alpaca.functions";
 import { WEEKLY_CONTRIBUTION_USD } from "@/lib/paper-portfolio-rules";
 import type { PortfolioHolding } from "@/lib/factor-beta";
-import {
-  TradingAdminGate,
-  useTradingAdminSession,
-} from "@/components/dashboard/TradingAdminGate";
+import { TradingAdminGate, useTradingAdminSession } from "@/components/dashboard/TradingAdminGate";
 
 const usd = (n: number, digits = 2) =>
   n.toLocaleString("en-US", {
@@ -116,16 +113,13 @@ export function EtfDcaDesk({
     <section className="panel p-6">
       <div className="mb-2 flex flex-wrap items-center gap-2.5">
         <Landmark className="size-4 text-accent" />
-        <h2 className="font-display text-base font-semibold tracking-tight">
-          ETF DCA desk
-        </h2>
+        <h2 className="font-display text-base font-semibold tracking-tight">ETF DCA desk</h2>
         <span className="label-caps ml-auto">Alpaca equity · paper buys</span>
       </div>
       <p className="mb-5 max-w-3xl text-sm text-muted-foreground">
-        Propose this week&apos;s ~{usd(WEEKLY_CONTRIBUTION_USD, 0)} factor buys from the live
-        target weights, place notional market orders on Alpaca paper, and map fills into tax
-        lots. HIFO / TLH sells stay on the internal ledger path. Place requires an unlocked
-        admin session.
+        Propose this week&apos;s ~{usd(WEEKLY_CONTRIBUTION_USD, 0)} factor buys from the live target
+        weights, place notional market orders on Alpaca paper, and map fills into tax lots. HIFO /
+        TLH sells stay on the internal ledger path. Place requires an unlocked admin session.
       </p>
 
       <TradingAdminGate />
@@ -181,7 +175,10 @@ export function EtfDcaDesk({
             </thead>
             <tbody>
               {rows.map((row) => (
-                <tr key={`${row.reason}-${row.ticker}`} className="border-b border-border/50 last:border-0">
+                <tr
+                  key={`${row.reason}-${row.ticker}`}
+                  className="border-b border-border/50 last:border-0"
+                >
                   <td className="py-2.5 pr-4 font-mono font-medium">{row.ticker}</td>
                   <td className="py-2.5 pr-4 text-right font-mono tabular-nums">
                     {(row.weight * 100).toFixed(1)}%

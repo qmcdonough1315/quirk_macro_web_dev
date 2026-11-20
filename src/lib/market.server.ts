@@ -1,6 +1,5 @@
 /** Server-only FRED helpers for the macro dashboard. */
 
-
 export interface SeriesPoint {
   date: string;
   value: number;
@@ -30,9 +29,9 @@ export async function fetchFredSeries(seriesId: string): Promise<SeriesSummary> 
   start.setUTCFullYear(start.getUTCFullYear() - 1);
   start.setUTCDate(start.getUTCDate() - 45);
 
-  const url = `${FRED_BASE}?series_id=${seriesId}&api_key=${apiKey}&file_type=json&observation_start=${
-    start.toISOString().slice(0, 10)
-  }`;
+  const url = `${FRED_BASE}?series_id=${seriesId}&api_key=${apiKey}&file_type=json&observation_start=${start
+    .toISOString()
+    .slice(0, 10)}`;
 
   const res = await fetch(url);
   if (!res.ok) throw new Error(`FRED request failed for ${seriesId} (${res.status})`);
@@ -233,7 +232,10 @@ async function latestAndYearAgo(seriesId: string) {
 
 export async function fetchRatesOutlook(): Promise<RatesOutlook> {
   const results = await Promise.all(
-    CURVE_SERIES.map(async (s) => ({ meta: s, data: await latestAndYearAgo(s.id).catch(() => null) })),
+    CURVE_SERIES.map(async (s) => ({
+      meta: s,
+      data: await latestAndYearAgo(s.id).catch(() => null),
+    })),
   );
 
   const curve: CurvePoint[] = [];
@@ -269,8 +271,14 @@ export async function fetchRatesOutlook(): Promise<RatesOutlook> {
 /** Approximate next FOMC decision date (8 meetings/yr, ~6-week cadence). */
 function nextFomcMeeting(): string {
   const dates2026 = [
-    "2026-01-28", "2026-03-18", "2026-04-29", "2026-06-17",
-    "2026-07-29", "2026-09-16", "2026-11-04", "2026-12-16",
+    "2026-01-28",
+    "2026-03-18",
+    "2026-04-29",
+    "2026-06-17",
+    "2026-07-29",
+    "2026-09-16",
+    "2026-11-04",
+    "2026-12-16",
   ];
   const today = new Date().toISOString().slice(0, 10);
   return dates2026.find((d) => d >= today) ?? "2027-01-27";

@@ -17,7 +17,10 @@ export const STRATEGY_INCEPTION_DATE = "2026-09-20";
 
 /** Undeployed ETF capital still sitting in the yield engine during the DCA ramp. */
 export function etfFloatRemainingUsd(runCount: number): number {
-  const invested = Math.min(ETF_TARGET_CAPITAL_USD, Math.max(0, runCount) * WEEKLY_CONTRIBUTION_USD);
+  const invested = Math.min(
+    ETF_TARGET_CAPITAL_USD,
+    Math.max(0, runCount) * WEEKLY_CONTRIBUTION_USD,
+  );
   return Math.max(0, ETF_TARGET_CAPITAL_USD - invested);
 }
 

@@ -58,10 +58,7 @@ export type ResearchCard = {
     note?: string;
     sample?: boolean;
   };
-  benchmarks: Record<
-    string,
-    { label: string; weights: Record<string, number>; role: string }
-  >;
+  benchmarks: Record<string, { label: string; weights: Record<string, number>; role: string }>;
   periods: ResearchPeriod[];
 };
 
@@ -93,9 +90,7 @@ export const usd = (n: number | null | undefined) => {
   });
 };
 
-export function toneForSigned(
-  n: number | null | undefined,
-): "positive" | "negative" | "muted" {
+export function toneForSigned(n: number | null | undefined): "positive" | "negative" | "muted" {
   if (typeof n !== "number" || !Number.isFinite(n) || n === 0) return "muted";
   return n > 0 ? "positive" : "negative";
 }

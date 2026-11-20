@@ -50,9 +50,9 @@ export async function fetchLiveIvRanks(
 ): Promise<{ rows: LiveIvRankRow[]; notes: string[] }> {
   const notes: string[] = [];
   const wanted = new Set(tickers.map((t) => t.toUpperCase()));
-  const { data, error } = await supabase.from("option_iv_rank_latest").select(
-    "ticker, iv_rank, as_of_date, current_iv, n_obs, source",
-  );
+  const { data, error } = await supabase
+    .from("option_iv_rank_latest")
+    .select("ticker, iv_rank, as_of_date, current_iv, n_obs, source");
   if (error) {
     return { rows: [], notes: [`IV Rank view unavailable: ${error.message}`] };
   }

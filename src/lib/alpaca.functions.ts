@@ -60,12 +60,10 @@ const proposeSchema = z.object({
   useLiveSignals: z.boolean().optional(),
 });
 
-export const getLiveOptionsSignalBoard = createServerFn({ method: "GET" }).handler(
-  async () => {
-    const { buildLiveOptionsSignalBoard } = await import("./options-signals.server");
-    return buildLiveOptionsSignalBoard();
-  },
-);
+export const getLiveOptionsSignalBoard = createServerFn({ method: "GET" }).handler(async () => {
+  const { buildLiveOptionsSignalBoard } = await import("./options-signals.server");
+  return buildLiveOptionsSignalBoard();
+});
 
 export const proposeAlpacaOptionsTrades = createServerFn({ method: "POST" })
   .validator((input: unknown) => proposeSchema.parse(input))
@@ -74,9 +72,8 @@ export const proposeAlpacaOptionsTrades = createServerFn({ method: "POST" })
       let signals = data.signals ?? [];
       const notes: string[] = [];
       if (data.useLiveSignals || signals.length === 0) {
-        const { buildLiveOptionsSignalBoard, readySignalsForPropose } = await import(
-          "./options-signals.server"
-        );
+        const { buildLiveOptionsSignalBoard, readySignalsForPropose } =
+          await import("./options-signals.server");
         const board = await buildLiveOptionsSignalBoard();
         notes.push(...board.notes);
         signals = readySignalsForPropose(board);
@@ -188,9 +185,7 @@ export const proposeAlpacaEtfDca = createServerFn({ method: "POST" })
     try {
       return await proposeEtfDcaBuys({
         weights: data.weights,
-        ...(data.weeklyContribution != null
-          ? { weeklyContribution: data.weeklyContribution }
-          : {}),
+        ...(data.weeklyContribution != null ? { weeklyContribution: data.weeklyContribution } : {}),
         ...(data.includeVoo != null ? { includeVoo: data.includeVoo } : {}),
       });
     } catch (err) {
