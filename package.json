@@ -52,7 +52,8 @@
     "vite": "^8.2.4"
   },
   "overrides": {
-    "js-yaml": "^4.3.2",
+    "body-parser": "^2.4.0",
+    "js-yaml": "4.3.2",
     "nanoid": "^3.3.18",
     "seroval": "^1.8.2",
     "source-map-js": "1.2.3",
