@@ -209,9 +209,10 @@ const etfPlaceSchema = z.object({
   confirm: z.literal(true),
   symbol: z.string().min(1).max(8),
   notional: z.number().min(1).max(50_000),
+  /** YYYY-MM-DD — required so client_order_id is stable across retries. */
+  runDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   reason: z.enum(["weekly_dca", "weekly_voo_dca"]).optional(),
   strategy: z.enum(["factor", "voo"]).optional(),
-  runDate: z.string().min(8).max(32).optional(),
 });
 
 export const placeAlpacaEtfBuy = createServerFn({ method: "POST" })
@@ -236,9 +237,9 @@ export const placeAlpacaEtfBuy = createServerFn({ method: "POST" })
         confirm: data.confirm,
         symbol: data.symbol,
         notional: data.notional,
+        runDate: data.runDate,
         ...(data.reason != null ? { reason: data.reason } : {}),
         ...(data.strategy != null ? { strategy: data.strategy } : {}),
-        ...(data.runDate != null ? { runDate: data.runDate } : {}),
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : "ETF buy failed";

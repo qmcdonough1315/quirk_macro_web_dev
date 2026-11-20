@@ -27,6 +27,32 @@ export interface EquityBuyPayload {
   side: "buy";
   type: "market";
   time_in_force: "day";
+  /** Deterministic Alpaca idempotency key (max 48 chars). */
+  client_order_id?: string;
+}
+
+/** Alpaca client_order_id max length. */
+export const ETF_CLIENT_ORDER_ID_MAX = 48;
+
+/**
+ * Deterministic ETF DCA client_order_id: `etf-{strategy}-{runDate}-{symbol}`.
+ * Truncates to {@link ETF_CLIENT_ORDER_ID_MAX} if needed.
+ */
+export function buildEtfClientOrderId(input: {
+  strategy: "factor" | "voo";
+  runDate: string;
+  symbol: string;
+}): string {
+  const strategy = input.strategy === "voo" ? "voo" : "factor";
+  const runDate = input.runDate.trim().slice(0, 10);
+  const symbol = input.symbol.trim().toUpperCase();
+  const raw = `etf-${strategy}-${runDate}-${symbol}`;
+  return raw.length <= ETF_CLIENT_ORDER_ID_MAX ? raw : raw.slice(0, ETF_CLIENT_ORDER_ID_MAX);
+}
+
+/** True when Alpaca rejected a place because client_order_id already exists. */
+export function isDuplicateClientOrderIdError(error: string): boolean {
+  return /client_order_id|already exists|duplicate/i.test(error);
 }
 
 export interface EtfBuyProposalRow {
@@ -107,7 +133,11 @@ export function allocateWeeklyDca(
     .filter((b) => b.notional >= minNotional);
 }
 
-export function buildEquityBuyPayload(ticker: string, notional: number): EquityBuyPayload {
+export function buildEquityBuyPayload(
+  ticker: string,
+  notional: number,
+  opts?: { clientOrderId?: string },
+): EquityBuyPayload {
   if (!(notional >= MIN_NOTIONAL_USD)) {
     throw new Error(`notional must be >= ${MIN_NOTIONAL_USD}`);
   }
@@ -119,6 +149,7 @@ export function buildEquityBuyPayload(ticker: string, notional: number): EquityB
     side: "buy",
     type: "market",
     time_in_force: "day",
+    ...(opts?.clientOrderId ? { client_order_id: opts.clientOrderId } : {}),
   };
 }
 
