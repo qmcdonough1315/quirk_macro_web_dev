@@ -14,12 +14,7 @@ import {
   WEEKLY_CONTRIBUTION_USD,
 } from "./paper-portfolio-rules";
 
-export type {
-  MissingPriceFailure,
-  PaperPortfolioSnapshot,
-  PaperWeeklyPoint,
-  SleeveTaxPosition,
-};
+export type { MissingPriceFailure, PaperPortfolioSnapshot, PaperWeeklyPoint, SleeveTaxPosition };
 
 export const getPaperPortfolio = createServerFn({ method: "GET" }).handler(
   async (): Promise<PaperPortfolioSnapshot> => {

@@ -326,10 +326,7 @@ async function fetchYahooOpens(
     });
   }
 
-  function applyCachedSuccess(
-    ticker: string,
-    entry: Extract<YahooTickerCacheEntry, { ok: true }>,
-  ) {
+  function applyCachedSuccess(ticker: string, entry: Extract<YahooTickerCacheEntry, { ok: true }>) {
     if (entry.bars.size) market.bars.set(ticker, entry.bars);
     if (entry.dividends.length) market.dividends.set(ticker, entry.dividends);
     if (entry.splits.length) market.splits.set(ticker, entry.splits);
