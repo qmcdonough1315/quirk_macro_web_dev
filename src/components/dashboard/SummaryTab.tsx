@@ -123,6 +123,11 @@ export function SummaryTab() {
 
   const snap = paper.data as PaperPortfolioSnapshot | undefined;
   const loading = paper.isPending;
+  const missingPrices = snap?.missingPrices ?? [];
+  const missingPricesBanner =
+    missingPrices.length > 0
+      ? `Prices missing for ${[...new Set(missingPrices.map((f) => f.ticker))].sort().join(", ")}; their allocation is shown as cash`
+      : null;
   const runCount = snap?.runCount ?? 0;
   const etfFloat = snap?.etfFloatRemaining ?? ETF_TARGET_CAPITAL_USD;
   const alpacaLive = Boolean(alpaca.data?.live);
@@ -228,6 +233,11 @@ export function SummaryTab() {
           connected, Book NAV uses Alpaca equity; ETF sleeve metrics still come from the factor DCA
           ledger. Detail tables live on sleeve tabs.
         </p>
+        {missingPricesBanner ? (
+          <p className="mb-5 max-w-3xl rounded-lg border border-border/70 bg-secondary/20 px-3 py-2 text-sm text-foreground">
+            {missingPricesBanner}
+          </p>
+        ) : null}
 
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {loading ? (

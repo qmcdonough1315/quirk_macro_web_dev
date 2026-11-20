@@ -3,6 +3,7 @@ import { createServerFn } from "@tanstack/react-start";
 import {
   simulatePaperPortfolio,
   zeroSleeveTax,
+  type MissingPriceFailure,
   type PaperPortfolioSnapshot,
   type PaperWeeklyPoint,
   type SleeveTaxPosition,
@@ -13,7 +14,7 @@ import {
   WEEKLY_CONTRIBUTION_USD,
 } from "./paper-portfolio-rules";
 
-export type { PaperPortfolioSnapshot, PaperWeeklyPoint, SleeveTaxPosition };
+export type { MissingPriceFailure, PaperPortfolioSnapshot, PaperWeeklyPoint, SleeveTaxPosition };
 
 export const getPaperPortfolio = createServerFn({ method: "GET" }).handler(
   async (): Promise<PaperPortfolioSnapshot> => {
@@ -39,6 +40,7 @@ export const getPaperPortfolio = createServerFn({ method: "GET" }).handler(
         recentTrades: [],
         weeklySeries: [],
         notes: [message],
+        missingPrices: [],
         etfFloatRemaining: ETF_TARGET_CAPITAL_USD,
         etfTargetCapital: ETF_TARGET_CAPITAL_USD,
         weeklyContribution: WEEKLY_CONTRIBUTION_USD,
