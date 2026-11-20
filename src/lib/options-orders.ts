@@ -97,7 +97,9 @@ function parseYmd(ymd: string): Date {
 }
 
 function daysBetween(a: Date, b: Date): number {
-  const ms = parseYmd(b.toISOString().slice(0, 10)).getTime() - parseYmd(a.toISOString().slice(0, 10)).getTime();
+  const ms =
+    parseYmd(b.toISOString().slice(0, 10)).getTime() -
+    parseYmd(a.toISOString().slice(0, 10)).getTime();
   return Math.round(ms / 86_400_000);
 }
 
@@ -245,10 +247,7 @@ function pickShort(
   return closestByStrike(otm, targetStrike);
 }
 
-function legSpec(
-  contract: OptionContractQuote,
-  side: "buy" | "sell",
-): OrderLegSpec {
+function legSpec(contract: OptionContractQuote, side: "buy" | "sell"): OrderLegSpec {
   return {
     symbol: contract.symbol,
     side,
@@ -374,7 +373,9 @@ export function proposeDefinedRiskTrade(input: ProposeTradeInput): TradeProposal
       dated,
       "call",
       spot,
-      signal.structure === "iron_condor" ? (signal.wingDelta ?? signal.shortDelta) : signal.shortDelta,
+      signal.structure === "iron_condor"
+        ? (signal.wingDelta ?? signal.shortDelta)
+        : signal.shortDelta,
     );
     if (!shortCall) {
       return {

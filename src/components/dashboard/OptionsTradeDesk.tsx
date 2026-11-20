@@ -12,10 +12,7 @@ import {
 } from "@/lib/alpaca.functions";
 import type { AlpacaConnStatus } from "@/lib/alpaca-status";
 import { compareRankScore, rankCreditProposal } from "@/lib/options-ranker";
-import {
-  TradingAdminGate,
-  useTradingAdminSession,
-} from "@/components/dashboard/TradingAdminGate";
+import { TradingAdminGate, useTradingAdminSession } from "@/components/dashboard/TradingAdminGate";
 
 /** Paper desk places 1 lot by default; sizing still shown on the proposal row. */
 const PLACE_QTY = 1;
@@ -62,7 +59,8 @@ export function OptionsTradeDesk({
     );
     return [...proposals]
       .map((row) => {
-        if (!isProposal(row)) return { row, rank: null as ReturnType<typeof rankCreditProposal> | null };
+        if (!isProposal(row))
+          return { row, rank: null as ReturnType<typeof rankCreditProposal> | null };
         const ivRank = ivByTicker.get(row.ticker.toUpperCase()) ?? row.signal.ivRank;
         return { row, rank: rankCreditProposal(row, ivRank) };
       })
@@ -131,18 +129,17 @@ export function OptionsTradeDesk({
     <section className="panel p-6">
       <div className="mb-2 flex flex-wrap items-center gap-2.5">
         <Sparkles className="size-4 text-accent" />
-        <h2 className="font-display text-base font-semibold tracking-tight">
-          Paper trade desk
-        </h2>
+        <h2 className="font-display text-base font-semibold tracking-tight">Paper trade desk</h2>
         <span className="label-caps ml-auto">Phase 1 · sell rich IVR · HITL paper</span>
       </div>
       <p className="mb-5 max-w-3xl text-sm text-muted-foreground">
         Phase 1 harvests elevated IV Rank with defined-risk credit spreads and stands aside when IV
-        is cheap (IVR &lt; 30) — it does not buy undervalued vol. Builds proposals from live Supabase
-        IV Rank plus published <span className="font-mono text-[11px]">options_composite</span>{" "}
-        scores, prices them on the Alpaca chain, then places paper mleg only after you confirm.
-        Missing live inputs are skipped — never filled with demo data. Place submits {PLACE_QTY}{" "}
-        contract by default and requires an unlocked admin session.
+        is cheap (IVR &lt; 30) — it does not buy undervalued vol. Builds proposals from live
+        Supabase IV Rank plus published{" "}
+        <span className="font-mono text-[11px]">options_composite</span> scores, prices them on the
+        Alpaca chain, then places paper mleg only after you confirm. Missing live inputs are skipped
+        — never filled with demo data. Place submits {PLACE_QTY} contract by default and requires an
+        unlocked admin session.
       </p>
 
       <TradingAdminGate />
@@ -181,11 +178,9 @@ export function OptionsTradeDesk({
                   <td className="px-3 py-2.5 text-right font-mono tabular-nums">
                     {row.ivRank == null ? "—" : `${row.ivRank.toFixed(1)}%`}
                   </td>
-                  <td className="px-3 py-2.5 font-mono text-xs">
-                    {row.signal?.structure ?? "—"}
-                  </td>
+                  <td className="px-3 py-2.5 font-mono text-xs">{row.signal?.structure ?? "—"}</td>
                   <td className="px-3 py-2.5 text-xs text-muted-foreground">
-                    {row.ready ? "Ready" : row.skipReason ?? "Not ready"}
+                    {row.ready ? "Ready" : (row.skipReason ?? "Not ready")}
                   </td>
                 </tr>
               ))
@@ -260,7 +255,10 @@ export function OptionsTradeDesk({
               ranked.map(({ row, rank }, idx) => {
                 if (!isProposal(row)) {
                   return (
-                    <tr key={`${row.ticker}-skip`} className="border-b border-border/40 last:border-0">
+                    <tr
+                      key={`${row.ticker}-skip`}
+                      className="border-b border-border/40 last:border-0"
+                    >
                       <td className="px-3 py-2.5 font-mono text-xs text-muted-foreground">—</td>
                       <td className="px-3 py-2.5 font-mono font-semibold">{row.ticker}</td>
                       <td className="px-3 py-2.5 font-mono text-xs">{row.structure}</td>

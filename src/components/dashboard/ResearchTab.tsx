@@ -18,7 +18,7 @@ function Metric({
 }: {
   label: string;
   value: string;
-  note?: string;
+  note?: string | undefined;
   tone?: "positive" | "negative" | "muted";
 }) {
   const valueClass =
@@ -59,8 +59,7 @@ export function ResearchTab() {
   const peer = a.headline_peer ?? "VOO_JEPI_50_50";
   const periods = card.periods.filter((p) => !p.error);
 
-  const headline =
-    periods.find((p) => p.period_id === "FULL") ?? periods[0] ?? null;
+  const headline = periods.find((p) => p.period_id === "FULL") ?? periods[0] ?? null;
   const vsPeer = headline?.combined?.excess_total_vs_benchmark ?? null;
 
   return (
@@ -75,11 +74,10 @@ export function ResearchTab() {
               Walk-forward research card
             </h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              Expected performance across frozen market windows for a{" "}
-              {usd(a.total_capital_usd)} book at{" "}
-              {Math.round((a.etf_weight ?? 0.5) * 100)}/
-              {Math.round((a.options_weight ?? 0.5) * 100)} ETF model / options book
-              (margin reserve counted inside the options book). Headline peer:{" "}
+              Expected performance across frozen market windows for a {usd(a.total_capital_usd)}{" "}
+              book at {Math.round((a.etf_weight ?? 0.5) * 100)}/
+              {Math.round((a.options_weight ?? 0.5) * 100)} ETF model / options book (margin reserve
+              counted inside the options book). Headline peer:{" "}
               <span className="font-mono text-foreground">{peer}</span>.
             </p>
           </div>
@@ -92,8 +90,8 @@ export function ResearchTab() {
               Showing a <strong>schema sample</strong> with illustrative numbers. Replace{" "}
               <code className="font-mono text-xs">src/data/walkforward-period-matrix.json</code>{" "}
               with output from{" "}
-              <code className="font-mono text-xs">scripts/run_walkforward_period_pack.py</code>{" "}
-              for live research results.
+              <code className="font-mono text-xs">scripts/run_walkforward_period_pack.py</code> for
+              live research results.
             </p>
           </div>
         ) : null}
@@ -128,9 +126,7 @@ export function ResearchTab() {
 
       <section className="panel overflow-hidden p-0">
         <div className="border-b border-border/70 px-5 py-4 sm:px-6">
-          <h3 className="font-display text-sm font-semibold tracking-tight">
-            Period matrix
-          </h3>
+          <h3 className="font-display text-sm font-semibold tracking-tight">Period matrix</h3>
           <p className="mt-1 text-xs text-muted-foreground">
             Combined book vs peer on each frozen window. Options column shows sleeve return when IV
             history covers the window; otherwise <span className="font-mono">uncovered</span> and
@@ -225,9 +221,7 @@ export function ResearchTab() {
         </div>
 
         <div className="panel p-5">
-          <h3 className="font-display text-sm font-semibold tracking-tight">
-            How to read this
-          </h3>
+          <h3 className="font-display text-sm font-semibold tracking-tight">How to read this</h3>
           <div className="mt-4 space-y-4 text-sm text-muted-foreground">
             <p>
               Live paper since inception lives on Fund Summary / ETF Model. This tab is the{" "}
@@ -284,12 +278,12 @@ export function ResearchTab() {
                   <span className="font-mono text-foreground">COVID</span> — 2020 crash and rebound.
                 </li>
                 <li>
-                  <span className="font-mono text-foreground">BEAR_22</span> — 2022 inflation / rates
-                  bear.
+                  <span className="font-mono text-foreground">BEAR_22</span> — 2022 inflation /
+                  rates bear.
                 </li>
                 <li>
-                  <span className="font-mono text-foreground">BULL_23_24</span> — narrow leadership /
-                  calmer vol regime.
+                  <span className="font-mono text-foreground">BULL_23_24</span> — narrow leadership
+                  / calmer vol regime.
                 </li>
                 <li>
                   <span className="font-mono text-foreground">HOLD_OUT</span> — locked report card;
@@ -309,8 +303,8 @@ export function ResearchTab() {
                 </li>
                 <li>
                   When a period has <strong>no usable IV overlap</strong>, we do not invent IV and
-                  we do not force cash drag — Combined assumes <strong>100% invested in the ETF
-                  sleeve</strong>, and Options is labeled{" "}
+                  we do not force cash drag — Combined assumes{" "}
+                  <strong>100% invested in the ETF sleeve</strong>, and Options is labeled{" "}
                   <span className="font-mono text-foreground">uncovered</span>.
                 </li>
               </ul>

@@ -110,12 +110,12 @@ function factorMatrixOnDates(prices: PriceMap, dates: string[]): number[][] | nu
   const factors: number[][] = [];
   for (let i = 0; i < rets[0]!.length; i++) {
     factors.push([
-      rets[idx.SPY!]![i]!,
-      rets[idx.IWM!]![i]! - rets[idx.SPY!]![i]!,
-      rets[idx.IWD!]![i]! - rets[idx.IWF!]![i]!,
-      rets[idx.QUAL!]![i]! - rets[idx.SPY!]![i]!,
-      rets[idx.USMV!]![i]! - rets[idx.SPHB!]![i]!,
-      rets[idx.MTUM!]![i]! - rets[idx.SPY!]![i]!,
+      rets[idx["SPY"]!]![i]!,
+      rets[idx["IWM"]!]![i]! - rets[idx["SPY"]!]![i]!,
+      rets[idx["IWD"]!]![i]! - rets[idx["IWF"]!]![i]!,
+      rets[idx["QUAL"]!]![i]! - rets[idx["SPY"]!]![i]!,
+      rets[idx["USMV"]!]![i]! - rets[idx["SPHB"]!]![i]!,
+      rets[idx["MTUM"]!]![i]! - rets[idx["SPY"]!]![i]!,
     ]);
   }
   return factors;

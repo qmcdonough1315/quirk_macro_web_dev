@@ -43,7 +43,9 @@ export function OptionsBookTab() {
     mutationFn: (orderId: string) => cancelFn({ data: { orderId } }),
     onSuccess: async (result) => {
       if (result.ok) {
-        setCancelMessage(`Canceled order ${result.orderId?.slice(0, 8) ?? "?"}… (${result.status})`);
+        setCancelMessage(
+          `Canceled order ${result.orderId?.slice(0, 8) ?? "?"}… (${result.status})`,
+        );
         await queryClient.invalidateQueries({ queryKey: ["alpaca-paper-ledger"] });
       } else {
         setCancelMessage(result.error ?? "Cancel rejected");
@@ -291,10 +293,8 @@ export function OptionsBookTab() {
                 </thead>
                 <tbody>
                   {(ledger.data?.openOrders ?? []).map((order) => {
-                    const partial =
-                      order.filledQty > 0 && order.filledQty < order.qty;
-                    const canceling =
-                      cancel.isPending && cancel.variables === order.id;
+                    const partial = order.filledQty > 0 && order.filledQty < order.qty;
+                    const canceling = cancel.isPending && cancel.variables === order.id;
                     return (
                       <tr
                         key={order.id}
@@ -302,9 +302,7 @@ export function OptionsBookTab() {
                           partial ? "bg-secondary/30" : ""
                         }`}
                       >
-                        <td className="px-3 py-2.5 font-mono text-xs">
-                          {order.id.slice(0, 8)}…
-                        </td>
+                        <td className="px-3 py-2.5 font-mono text-xs">{order.id.slice(0, 8)}…</td>
                         <td className="px-3 py-2.5 font-mono text-xs">
                           {order.status}
                           {partial ? " · partial" : ""}
