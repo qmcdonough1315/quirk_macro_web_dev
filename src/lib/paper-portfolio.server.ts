@@ -93,10 +93,20 @@ export interface PaperPortfolioSnapshot {
   recentTrades: PaperTrade[];
   weeklySeries: PaperWeeklyPoint[];
   notes: string[];
+  /**
+   * Tickers whose Yahoo chart fetch failed (HTTP/empty/exception).
+   * Their target weight stays undeployed as cash in the paper book.
+   */
+  missingPrices: MissingPriceFailure[];
   /** Undeployed portion of the $50k ETF target still parked for future DCA weeks. */
   etfFloatRemaining: number;
   etfTargetCapital: number;
   weeklyContribution: number;
+}
+
+export interface MissingPriceFailure {
+  ticker: string;
+  reason: string;
 }
 
 export interface SleeveTaxPosition {
@@ -202,6 +212,62 @@ function emptyMarket(): MarketData {
   return { bars: new Map(), dividends: new Map(), splits: new Map() };
 }
 
+const YAHOO_CACHE_TTL_MS = 10 * 60 * 1000;
+const YAHOO_RETRY_BACKOFF_MS = 750;
+
+type YahooTickerCacheEntry =
+  | {
+      expiresAt: number;
+      ok: true;
+      bars: Map<string, QuoteBar>;
+      dividends: DividendEvent[];
+      splits: SplitEvent[];
+    }
+  | {
+      expiresAt: number;
+      ok: false;
+      reason: string;
+    };
+
+/** Module-scoped Yahoo chart cache keyed by ticker + unix range. */
+const yahooTickerCache = new Map<string, YahooTickerCacheEntry>();
+
+export function yahooChartCacheKey(ticker: string, period1: number, period2: number): string {
+  return `${ticker.toUpperCase()}|${period1}|${period2}`;
+}
+
+/** Desk copy when one or more Yahoo chart fetches failed. */
+export function missingPricesNote(failures: MissingPriceFailure[]): string | null {
+  if (!failures.length) return null;
+  const tickers = [...new Set(failures.map((f) => f.ticker))].sort();
+  return `Prices missing for ${tickers.join(", ")}; their allocation is shown as cash`;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function shouldRetryYahooStatus(status: number): boolean {
+  return status === 429 || status >= 500;
+}
+
+async function fetchYahooChartOnce(url: string): Promise<Response> {
+  return fetch(url, {
+    headers: {
+      "User-Agent": "Mozilla/5.0 quirk-macro-paper-portfolio",
+      Accept: "application/json",
+    },
+  });
+}
+
+/** One retry with backoff on HTTP 429 / 5xx. */
+async function fetchYahooChartWithRetry(url: string): Promise<Response> {
+  const first = await fetchYahooChartOnce(url);
+  if (!shouldRetryYahooStatus(first.status)) return first;
+  await sleep(YAHOO_RETRY_BACKOFF_MS);
+  return fetchYahooChartOnce(url);
+}
+
 function isoDateFromUnix(seconds: number): string {
   return new Date(seconds * 1000).toISOString().slice(0, 10);
 }
@@ -239,30 +305,56 @@ async function fetchYahooOpens(
   tickers: string[],
   startISO: string,
   endISO: string,
-): Promise<MarketData> {
+): Promise<{ market: MarketData; failures: MissingPriceFailure[] }> {
   const start = Math.floor(Date.parse(`${startISO}T00:00:00Z`) / 1000) - 86_400;
   const end = Math.floor(Date.parse(`${endISO}T23:59:59Z`) / 1000) + 86_400;
   const market = emptyMarket();
+  const failures: MissingPriceFailure[] = [];
+  const now = Date.now();
 
   // Cap concurrency to keep Yahoo happy.
   const queue = [...new Set(tickers.map((t) => t.toUpperCase()))];
   const workers = 6;
   let cursor = 0;
 
+  function recordFailure(ticker: string, reason: string) {
+    failures.push({ ticker, reason });
+    yahooTickerCache.set(yahooChartCacheKey(ticker, start, end), {
+      expiresAt: now + YAHOO_CACHE_TTL_MS,
+      ok: false,
+      reason,
+    });
+  }
+
+  function applyCachedSuccess(
+    ticker: string,
+    entry: Extract<YahooTickerCacheEntry, { ok: true }>,
+  ) {
+    if (entry.bars.size) market.bars.set(ticker, entry.bars);
+    if (entry.dividends.length) market.dividends.set(ticker, entry.dividends);
+    if (entry.splits.length) market.splits.set(ticker, entry.splits);
+  }
+
   async function worker() {
     while (cursor < queue.length) {
       const ticker = queue[cursor++]!;
+      const key = yahooChartCacheKey(ticker, start, end);
+      const cached = yahooTickerCache.get(key);
+      if (cached && cached.expiresAt > now) {
+        if (cached.ok) applyCachedSuccess(ticker, cached);
+        else failures.push({ ticker, reason: cached.reason });
+        continue;
+      }
+
       try {
         const url =
           `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}` +
           `?interval=1d&period1=${start}&period2=${end}&events=div%7Csplit`;
-        const res = await fetch(url, {
-          headers: {
-            "User-Agent": "Mozilla/5.0 quirk-macro-paper-portfolio",
-            Accept: "application/json",
-          },
-        });
-        if (!res.ok) continue;
+        const res = await fetchYahooChartWithRetry(url);
+        if (!res.ok) {
+          recordFailure(ticker, `HTTP ${res.status}`);
+          continue;
+        }
         const json = (await res.json()) as {
           chart?: {
             result?: Array<{
@@ -299,7 +391,11 @@ async function fetchYahooOpens(
           const date = new Date(ts[i]! * 1000).toISOString().slice(0, 10);
           series.set(date, { open, close: closePx });
         }
-        if (series.size) market.bars.set(ticker, series);
+        if (!series.size) {
+          recordFailure(ticker, "empty chart result");
+          continue;
+        }
+        market.bars.set(ticker, series);
 
         const dividends: DividendEvent[] = [];
         for (const event of Object.values(result?.events?.dividends ?? {})) {
@@ -324,14 +420,24 @@ async function fetchYahooOpens(
           splits.sort((a, b) => (a.date < b.date ? -1 : 1));
           market.splits.set(ticker, splits);
         }
-      } catch {
-        // Skip missing tickers; allocation residual stays in cash.
+
+        yahooTickerCache.set(key, {
+          expiresAt: now + YAHOO_CACHE_TTL_MS,
+          ok: true,
+          bars: series,
+          dividends,
+          splits,
+        });
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : "fetch exception";
+        recordFailure(ticker, reason);
       }
     }
   }
 
   await Promise.all(Array.from({ length: workers }, () => worker()));
-  return market;
+  failures.sort((a, b) => a.ticker.localeCompare(b.ticker) || a.reason.localeCompare(b.reason));
+  return { market, failures };
 }
 
 function priceOnOrBefore(
@@ -1040,6 +1146,7 @@ function summarize(
     recentTrades: taxLedgerTrades(state.trades),
     weeklySeries,
     notes: state.notes.slice(-8),
+    missingPrices: [],
     etfFloatRemaining: etfFloatRemainingUsd(runCount),
     etfTargetCapital: ETF_TARGET_CAPITAL_USD,
     weeklyContribution: WEEKLY_CONTRIBUTION_USD,
@@ -1065,6 +1172,7 @@ function emptySnapshot(notes: string[]): PaperPortfolioSnapshot {
     recentTrades: [],
     weeklySeries: [],
     notes,
+    missingPrices: [],
     etfFloatRemaining: ETF_TARGET_CAPITAL_USD,
     etfTargetCapital: ETF_TARGET_CAPITAL_USD,
     weeklyContribution: WEEKLY_CONTRIBUTION_USD,
@@ -1091,12 +1199,18 @@ export async function simulatePaperPortfolio(): Promise<PaperPortfolioSnapshot> 
   const end = new Date().toISOString().slice(0, 10);
   // Extra history before inception so beta OLS has a full lookback window.
   const betaWarmStart = "2025-01-01";
-  const market = await fetchYahooOpens(
+  const { market, failures } = await fetchYahooOpens(
     [...tickers],
     betaWarmStart < start ? betaWarmStart : start,
     end,
   );
-  return simulateLoadedBook(history, market, end);
+  const snap = simulateLoadedBook(history, market, end);
+  const priceNote = missingPricesNote(failures);
+  return {
+    ...snap,
+    missingPrices: failures,
+    notes: priceNote ? [...snap.notes, priceNote].slice(-8) : snap.notes,
+  };
 }
 
 export function simulateLoadedBook(
